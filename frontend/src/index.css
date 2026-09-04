@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Cesium Widget Clean Overrides */
+.cesium-viewer {
+  width: 100%;
+  height: 100%;
+  font-family: 'Inter', sans-serif !important;
+}
+
+.cesium-viewer-bottom {
+  display: none !important;
+}
+
+.cesium-widget-credits {
+  display: none !important;
+}

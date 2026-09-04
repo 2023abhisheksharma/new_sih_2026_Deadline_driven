@@ -1,0 +1,15 @@
+{
+  "dataset": "NGA World Port Index",
+  "publication": "Pub 150",
+  "source_url": "https://msi.nga.mil/api/publications/download?key=16920959/SFH00000/UpdatedPub150.csv&type=download",
+  "file": "UpdatedPub150.csv",
+  "retrieved_at": "2026-08-28T14:33:15Z",
+  "license_or_usage": "Public Domain / U.S. Government Work (U.S. National Geospatial-Intelligence Agency Maritime Safety Information). Approved for public release; distribution is unlimited.",
+  "canonical_source": true,
+  "coordinate_system": "WGS84 (EPSG:4326)",
+  "raw_record_count": 3807,
+  "processed_record_count": 3807,
+  "rejected_record_count": 0,
+  "file_size_bytes": 3508891,
+  "sha256": "315644f1e77966291633145fd351c2762b37702d115926b9ed074b39e8e21667"
+}

@@ -1,0 +1,29 @@
+{
+  "dataset": "U.S. National Ice Center (USNIC) Antarctic Iceberg Dataset",
+  "agency": "U.S. National Ice Center (NOAA / U.S. Navy / U.S. Coast Guard)",
+  "source_url": "https://usicecenter.gov/Products/AntarcIcebergs",
+  "download_urls": {
+    "shapefile": "https://usicecenter.gov/File/DownloadCurrent?pId=228",
+    "csv": "https://usicecenter.gov/File/DownloadCurrent?pId=134"
+  },
+  "retrieved_at": "2026-08-28T17:39:56Z",
+  "license_or_usage": "Public Domain / U.S. Government Work (NOAA / USNIC). Free and unrestricted public release.",
+  "canonical_source": true,
+  "source_coordinate_system": "WGS_1984_Stereographic_South_Pole (Polar Stereographic, latitude_of_origin=-60, central_meridian=180, meters)",
+  "target_coordinate_system": "WGS84 (EPSG:4326)",
+  "raw_feature_count": 33,
+  "processed_feature_count": 33,
+  "rejected_feature_count": 0,
+  "geometry_type": "Polygon",
+  "real_geometry_available": true,
+  "files": {
+    "current_icebergs_shp.zip": {
+      "size_bytes": 181187,
+      "sha256": "d45cc35f4b9082fae95507cf85c846ae94f45b1701f036ad0b0219e906eefb4a"
+    },
+    "current_icebergs.csv": {
+      "size_bytes": 1897,
+      "sha256": "8d02d0697f9f07d032dbad7141531b3a926d05c83b65b28fdc564d398fc2fb50"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "dataset": "BYU / NIC Antarctic Iceberg Tracking Database (v8.0)",
+  "title": "Antarctic Iceberg Database: Multi-Decadal Record of Giant Iceberg Calving and Drift",
+  "authors": [
+    "David G. Long",
+    "K. M. Stuart",
+    "S. P. Budge",
+    "J. Ballantyne"
+  ],
+  "institutions": [
+    "Brigham Young University (BYU) Microwave Earth Remote Sensing Laboratory (MERS)",
+    "National Ice Center (NIC) / NOAA / US Navy"
+  ],
+  "official_source_url": "https://www.scp.byu.edu/data/iceberg/database1.html",
+  "download_url": "https://www.scp.byu.edu/data/iceberg/consolidated_database_v8.0.zip",
+  "retrieved_at": "2026-08-28T18:16:49Z",
+  "original_filename": "consolidated_database_v8.0.zip",
+  "file_size_bytes": 4065659,
+  "sha256": "47d899c8bb1c3266d0b8c94a6f87c435dc68827a53f39dea3d78fe68ccc40cae",
+  "coordinate_system": "WGS84 (EPSG:4326)",
+  "observation_period": "1976-02-01 to 2026-04-30",
+  "sensor_constellations": [
+    "ASCAT",
+    "QuikSCAT (QSCAT)",
+    "NSCAT",
+    "Seasat SASS",
+    "NIC Satellite Visual/Infrared/Radar"
+  ],
+  "geometry_type": "Point / LineString Trajectory",
+  "total_raw_points": 516691,
+  "valid_points_count": 483116,
+  "rejected_points_count": 33575,
+  "distinct_icebergs_count": 624,
+  "statistics": {
+    "total_observations": 483116,
+    "distinct_iceberg_ids": 624,
+    "date_range": {
+      "earliest": "1976-02-01",
+      "latest": "2026-04-30"
+    },
+    "latitude_bounds": {
+      "min_lat_south": -79.1,
+      "max_lat_north": -42.5667
+    },
+    "longitude_bounds": {
+      "min_lon": -179.9998,
+      "max_lon": 179.9994
+    },
+    "southern_ocean_coverage": {
+      "observations_south_of_60S": 456814,
+      "observations_north_of_60S_open_drift": 26302,
+      "observations_north_of_55S_drake_scotia": 9294,
+      "observations_north_of_50S": 949,
+      "distinct_icebergs_drifting_north_of_60S": 210,
+      "distinct_icebergs_drifting_north_of_55S": 126
+    }
+  }
+}

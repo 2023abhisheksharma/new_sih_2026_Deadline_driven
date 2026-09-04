@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Strong dark halo for high-contrast visibility against bright white ice and dark ocean -->
+    <filter id="halo" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#020617" flood-opacity="0.95"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#020617" flood-opacity="0.8"/>
+    </filter>
+    <!-- Linear gradient for high-tech hull -->
+    <linearGradient id="cyanGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <feStop offset="0%" stop-color="#38bdf8"/>
+      <feStop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#halo)">
+    <!-- 1. Heading Vector Leader Line extending forward -->
+    <line x1="32" y1="12" x2="32" y2="2" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="32,0 34.5,4 29.5,4" fill="#38bdf8"/>
+
+    <!-- 2. Outer Position Reticle Rings (Subtle Pulse) -->
+    <circle cx="32" cy="34" r="22" fill="#090d16" fill-opacity="0.75" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="8 4" opacity="0.85"/>
+    <circle cx="32" cy="34" r="25" fill="none" stroke="#38bdf8" stroke-width="0.75" opacity="0.4"/>
+
+    <!-- 3. Sleek Top-Down Marine Research Vessel Body -->
+    <!-- Left Facet (Port Side) -->
+    <path d="M32 12
+             C30 18, 24 26, 24 38
+             L24 48
+             L27 51
+             L32 49 Z" 
+          fill="#0284c7" 
+          stroke="#f8fafc" 
+          stroke-width="1.2" 
+          stroke-linejoin="round"/>
+
+    <!-- Right Facet (Starboard Side - High-Lighted) -->
+    <path d="M32 12
+             C34 18, 40 26, 40 38
+             L40 48
+             L37 51
+             L32 49 Z" 
+          fill="#38bdf8" 
+          stroke="#f8fafc" 
+          stroke-width="1.2" 
+          stroke-linejoin="round"/>
+
+    <!-- 4. Polar Icebreaker Orange Bow Cap -->
+    <path d="M32 12
+             C30.8 16, 27 22, 27 26
+             L37 26
+             C37 22, 33.2 16, 32 12 Z" 
+          fill="#ef4444"/>
+
+    <!-- 5. Navigation Bridge / Deckhouse Core (White with Polar Glass) -->
+    <rect x="28" y="31" width="8" height="9" rx="1.5" fill="#f8fafc" stroke="#0f172a" stroke-width="0.5"/>
+    <circle cx="32" cy="35" r="1.5" fill="#0284c7"/>
+
+    <!-- 6. Helipad / Aft Symbol -->
+    <circle cx="32" cy="45" r="2.2" fill="#0f172a" stroke="#f8fafc" stroke-width="0.6"/>
+  </g>
+</svg>

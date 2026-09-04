@@ -1,0 +1,48 @@
+{
+  "dataset": "Circum-Antarctic Grounded Iceberg Inventory (Sentinel-1 SAR)",
+  "title": "Grounded icebergs around Antarctica: a high-resolution dataset derived from deep learning and Sentinel-1 synthetic aperture radar",
+  "authors": [
+    "Kaihong Jiao",
+    "Alexander D. Fraser",
+    "Robert A. Massom",
+    "Guy J. Williams",
+    "Delphine Lannuzel",
+    "Petra Heil"
+  ],
+  "source_organization": "Institute for Marine and Antarctic Studies (IMAS), University of Tasmania (UTAS)",
+  "dataset_doi": "10.25959/54sx-pt47",
+  "paper_doi": "10.5194/essd-18-6017-2026",
+  "publication_journal": "Earth System Science Data (ESSD)",
+  "publication_date": "2026-08-25",
+  "download_url": "https://data.imas.utas.edu.au/attachments/fed75718-1513-49cf-8253-a19347e7aeec/Antarctic_Grounded_Iceberg_Dataset_Sentinel1_v1.2.gpkg",
+  "retrieved_at": "2026-08-28T18:01:26Z",
+  "original_filename": "Antarctic_Grounded_Iceberg_Dataset_Sentinel1_v1.2.gpkg",
+  "file_size_bytes": 41414656,
+  "sha256": "936f05b94adc42a53df65365399f168ab2bdf6cf9d04541ccd8ebd6b31d473de",
+  "source_coordinate_system": "EPSG:3031 (WGS 84 / Antarctic Polar Stereographic)",
+  "target_coordinate_system": "EPSG:4326 (WGS84)",
+  "license": "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+  "observation_period": "Late February to Early April 2025",
+  "temporal_coverage": "2025-02-23 to 2025-04-21",
+  "classification_semantics": "Stationary iceberg targets on the Antarctic continental shelf (grounded icebergs and fast-ice-entrapped candidates). NOT freely drifting icebergs.",
+  "raw_record_count": 39619,
+  "processed_record_count": 39619,
+  "rejected_record_count": 0,
+  "geometry_type": "Polygon",
+  "valid_polygons": 39619,
+  "invalid_polygons": 0,
+  "repaired_polygons": 0,
+  "statistics": {
+    "total_targets": 39619,
+    "high_confidence_grounded_outside_fast_ice": 27557,
+    "fast_ice_entrapped_inside": 11436,
+    "partial_overlap_fast_ice": 626,
+    "area_km2_stats": {
+      "min": 0.0157,
+      "max": 39.3825,
+      "median": 0.127,
+      "mean": 0.3389862364017265,
+      "percentage_under_1_km2": 92.59698629445468
+    }
+  }
+}
