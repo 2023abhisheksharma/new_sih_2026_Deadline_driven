@@ -1,5 +1,67 @@
-# Node
-node_modules
-dist
-.DS_Store
+# ========================
+# Node / Frontend
+# ========================
+node_modules/
+dist/
+dist-ssr/
+*.local
 *.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ========================
+# Data — raw downloads & large processed files
+# ========================
+data/icebergs/raw/
+data/icebergs_drifting/raw/
+data/icebergs_satellite/raw/
+data/icebergs_drifting/processed/
+data/icebergs_satellite/processed/
+data/iceberg_validation/
+data/ports/raw/
+
+# Large GeoJSON basemaps (>1 MB) — use ne_50m for repo
+data/ne_10m_land.geojson
+data/ne_10m_antarctic_ice_shelves_polys.geojson
+
+# ========================
+# Scratch / test scripts
+# ========================
+scratch/
+
+# ========================
+# Root-level CSV / reports (not part of app)
+# ========================
+*.csv
+Iceberg_Datasets_Verified_Report.md
+
+# ========================
+# OS & Editor
+# ========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ========================
+# Python
+# ========================
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ========================
+# Environment / secrets
+# ========================
+.env
+.env.*
+!.env.example
