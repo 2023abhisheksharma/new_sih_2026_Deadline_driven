@@ -1,18 +1,18 @@
 /**
  * Real-world Iceberg Spatial Hazard Analysis Service
  * --------------------------------------------------
- * Evaluates calculated maritime routes against authoritative Antarctic iceberg datasets:
- * 1. USNIC Antarctic Iceberg Dataset (NOAA / USNIC macro icebergs with real polygon boundaries)
- * 2. Sentinel-1 Circum-Antarctic Grounded Iceberg Dataset (IMAS / UTAS / ESSD 2026 stationary targets)
+ * Evaluates calculated maritime routes against three authoritative Antarctic iceberg datasets:
+ * 1. USNIC Antarctic Iceberg Dataset (NOAA / USNIC macro-icebergs with real polygon boundaries)
+ * 2. Sentinel-1 Circum-Antarctic Grounded Iceberg Dataset (IMAS / UTAS / ESSD 2026 stationary shelf targets)
  * 3. BYU / NIC Antarctic Drifting Iceberg Tracking Database (MERS / NIC multi-decadal latest observations)
  *
  * All distance calculations use rigorous spherical geodesics (WGS84 ellipsoid mean radius R = 6,371,008.8m).
  * Spatial relationships are classified as:
  * - INTERSECTING: Route segment traverses the iceberg polygon or passes within zero margin (<= 50m)
  * - NEARBY: Route passes within the explicitly configured proximity corridor (default: 25.0 km / ~13.5 NM)
- * - NOT_NEARBY: Beyond threshold
+ * - NOT_NEARBY: Beyond proximity threshold
  *
- * NOTE: The analysis does NOT modify the route geometry and does NOT fabricate synthetic hazards or arbitrary risk scores.
+ * NOTE: The analysis does NOT modify route geometry and does NOT fabricate synthetic hazards or arbitrary risk scores.
  */
 
 import type { IcebergRecord } from '../types/iceberg';
@@ -23,170 +23,39 @@ import type {
   IcebergHazardItem,
   IceHazardThresholds,
 } from '../types/iceHazard';
-import { kmToNauticalMiles } from './routeValidationService';
+import {
+  calculateGeodesicDistanceMeters,
+  pointToSegmentGeodesicDistanceMeters,
+  segmentsIntersect,
+  pointInPolygon,
+  kmToNauticalMiles,
+  toRad,
+} from '../utils/geo';
 
-const EARTH_RADIUS_METERS = 6371008.8;
+// Re-export geodesic functions for backwards compatibility
+export { calculateGeodesicDistanceMeters, pointToSegmentGeodesicDistanceMeters };
 
 export const DEFAULT_HAZARD_THRESHOLDS: IceHazardThresholds = {
   nearbyThresholdKm: 25.0,
   nearbyThresholdNm: kmToNauticalMiles(25.0),
   intersectionBufferMeters: 50.0,
-  description: 'Documented decision-support proximity corridor: 25.0 km (~13.5 NM) buffer with 50m geometric intersection threshold',
+  description:
+    'Documented decision-support proximity corridor: 25.0 km (~13.5 NM) buffer with 50m geometric intersection threshold',
 };
-
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180.0;
-}
-
-/**
- * Calculates geodesic distance between two points on the WGS84 sphere (Haversine formula).
- */
-export function calculateGeodesicDistanceMeters(
-  lon1: number,
-  lat1: number,
-  lon2: number,
-  lat2: number
-): number {
-  const phi1 = toRad(lat1);
-  const phi2 = toRad(lat2);
-  const dphi = toRad(lat2 - lat1);
-  const dlambda = toRad(lon2 - lon1);
-
-  const a =
-    Math.sin(dphi / 2.0) ** 2 +
-    Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlambda / 2.0) ** 2;
-  const c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
-  return EARTH_RADIUS_METERS * c;
-}
-
-/**
- * 3D Cartesian unit vector on unit sphere.
- */
-function toCartesianUnit(lonDeg: number, latDeg: number): [number, number, number] {
-  const phi = toRad(latDeg);
-  const lambda = toRad(lonDeg);
-  return [
-    Math.cos(phi) * Math.cos(lambda),
-    Math.cos(phi) * Math.sin(lambda),
-    Math.sin(phi),
-  ];
-}
-
-function dot(u: [number, number, number], v: [number, number, number]): number {
-  return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-}
-
-function cross(
-  u: [number, number, number],
-  v: [number, number, number]
-): [number, number, number] {
-  return [
-    u[1] * v[2] - u[2] * v[1],
-    u[2] * v[0] - u[0] * v[2],
-    u[0] * v[1] - u[1] * v[0],
-  ];
-}
-
-function norm(u: [number, number, number]): number {
-  return Math.sqrt(dot(u, u));
-}
-
-function normalize(u: [number, number, number]): [number, number, number] {
-  const len = norm(u);
-  if (len === 0) return [0, 0, 0];
-  return [u[0] / len, u[1] / len, u[2] / len];
-}
-
-/**
- * Calculates exact minimum geodesic distance in meters from a point P to a great circle line segment AB.
- */
-export function pointToSegmentGeodesicDistanceMeters(
-  pLon: number,
-  pLat: number,
-  aLon: number,
-  aLat: number,
-  bLon: number,
-  bLat: number
-): number {
-  const distPA = calculateGeodesicDistanceMeters(pLon, pLat, aLon, aLat);
-  const distPB = calculateGeodesicDistanceMeters(pLon, pLat, bLon, bLat);
-  const distAB = calculateGeodesicDistanceMeters(aLon, aLat, bLon, bLat);
-
-  if (distAB < 1e-3) {
-    return distPA;
-  }
-
-  const vA = toCartesianUnit(aLon, aLat);
-  const vB = toCartesianUnit(bLon, bLat);
-  const vP = toCartesianUnit(pLon, pLat);
-
-  const vAB = cross(vA, vB);
-  const n = normalize(vAB);
-
-  if (norm(vAB) < 1e-12) {
-    return Math.min(distPA, distPB);
-  }
-
-  const dPlane = dot(vP, n);
-  const vProj: [number, number, number] = [
-    vP[0] - dPlane * n[0],
-    vP[1] - dPlane * n[1],
-    vP[2] - dPlane * n[2],
-  ];
-  const vProjNorm = normalize(vProj);
-
-  const c1 = dot(cross(vA, vProjNorm), n);
-  const c2 = dot(cross(vProjNorm, vB), n);
-
-  if (c1 >= -1e-9 && c2 >= -1e-9) {
-    const angularDistRad = Math.asin(Math.min(1.0, Math.max(-1.0, Math.abs(dPlane))));
-    return angularDistRad * EARTH_RADIUS_METERS;
-  }
-
-  return Math.min(distPA, distPB);
-}
-
-function segmentsIntersect(
-  p1: [number, number],
-  p2: [number, number],
-  p3: [number, number],
-  p4: [number, number]
-): boolean {
-  function ccw(a: [number, number], b: [number, number], c: [number, number]): boolean {
-    return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0]);
-  }
-  return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
-}
-
-function pointInPolygon(point: [number, number], ring: [number, number][]): boolean {
-  const x = point[0];
-  const y = point[1];
-  let inside = false;
-  const n = ring.length;
-  if (n < 3) return false;
-
-  let p1 = ring[0];
-  for (let i = 1; i <= n; i++) {
-    const p2 = ring[i % n];
-    if (y > Math.min(p1[1], p2[1])) {
-      if (y <= Math.max(p1[1], p2[1])) {
-        if (x <= Math.max(p1[0], p2[0])) {
-          if (p1[1] !== p2[1]) {
-            const xinters = ((y - p1[1]) * (p2[0] - p1[0])) / (p2[1] - p1[1]) + p1[0];
-            if (p1[0] === p2[0] || x <= xinters) {
-              inside = !inside;
-            }
-          }
-        }
-      }
-    }
-    p1 = p2;
-  }
-  return inside;
-}
 
 /**
  * Performs rigorous spatial hazard analysis of an existing calculated maritime route against real iceberg datasets.
+ *
+ * Performance Optimization:
+ * Pre-computes a bounding box (latitude and longitude bounds with buffer) over the entire route
+ * to discard 99%+ of irrelevant circum-Antarctic iceberg targets before executing detailed segment-to-polygon checks.
+ *
+ * @param routeCoordinates LineString coordinates [[lon, lat], ...] of the computed route
+ * @param usnicIcebergs Active USNIC macro-icebergs with tracked polygon boundaries
+ * @param sentinel1Icebergs Grounded icebergs from Sentinel-1 SAR inventory
+ * @param driftingIcebergs Latest observations from BYU/NIC scatterometer tracks
+ * @param thresholds Configured spatial proximity and intersection thresholds
+ * @returns Comprehensive IceHazardAnalysisReport containing sorted hazards and statistical summary
  */
 export async function analyzeRouteIcebergHazards(
   routeCoordinates: [number, number][],
@@ -269,9 +138,9 @@ export async function analyzeRouteIcebergHazards(
 
   const detectedHazards: IcebergHazardItem[] = [];
 
-  // ==========================================
-  // 1. USNIC Antarctic Icebergs (Macro Icebergs)
-  // ==========================================
+  // ==========================================================================
+  // 1. USNIC Antarctic Icebergs (Macro Icebergs with Multi-vertex Polygons)
+  // ==========================================================================
   if (usnicIcebergs && usnicIcebergs.length > 0) {
     for (const berg of usnicIcebergs) {
       if (
@@ -385,9 +254,9 @@ export async function analyzeRouteIcebergHazards(
     }
   }
 
-  // ==============================================================
-  // 2. Sentinel-1 Circum-Antarctic Grounded Icebergs (39,619 Targets)
-  // ==============================================================
+  // ==========================================================================
+  // 2. Sentinel-1 Circum-Antarctic Grounded Icebergs (39,619 Stationary Targets)
+  // ==========================================================================
   if (sentinel1Icebergs && sentinel1Icebergs.length > 0) {
     for (let bIdx = 0; bIdx < sentinel1Icebergs.length; bIdx++) {
       const berg = sentinel1Icebergs[bIdx];
@@ -514,9 +383,9 @@ export async function analyzeRouteIcebergHazards(
     }
   }
 
-  // ==============================================================
-  // 3. BYU / NIC Drifting Icebergs (Latest Observed Positions)
-  // ==============================================================
+  // ==========================================================================
+  // 3. BYU / NIC Drifting Icebergs (Latest Observed Satellite Positions)
+  // ==========================================================================
   if (driftingIcebergs && driftingIcebergs.length > 0) {
     for (const berg of driftingIcebergs) {
       if (!berg.latestPos) continue;

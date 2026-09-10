@@ -1,16 +1,41 @@
-import TinyQueue from "tinyqueue";
-import { seaRoute } from "searoute-ts";
-import { DEFAULT_MARNET as marnet20 } from "searoute-ts/marnet-20km";
-import type { PortRecord } from "../types/port";
+/**
+ * Maritime Routing Engine
+ * -----------------------
+ * Computes authentic, water-constrained maritime navigation routes between
+ * real-world ports in the Antarctic and Southern Ocean theaters.
+ *
+ * Routing Strategy (3-Tier Hierarchical Fallback):
+ * 1. Primary Strategy: High-Resolution Polar Navigable Water Graph (`polarWaterGraph.json`).
+ *    - Derived from GEBCO 2024 bathymetry, SCAR Antarctic Digital Database (ADD), and Natural Earth 10m.
+ *    - Guarantees 100% water-constrained navigation through polar channels, straits, and sounds.
+ *    - Solved using Dijkstra's algorithm with a binary min-heap priority queue (`TinyQueue`).
+ *
+ * 2. Secondary Strategy: Eurostat MARNET 20km Mesh (`searoute-ts`).
+ *    - Sourced from the European Commission's maritime transport network.
+ *    - Used for open-ocean transits and northern gateway connections.
+ *
+ * 3. Tertiary Strategy: Direct Coastal Channel Line-of-Sight.
+ *    - For adjacent local ports (< 150 km) where direct line-of-sight passes all land checks.
+ *
+ * Strict Hard Gate:
+ * Every candidate route must pass independent verification via `validateMaritimeRouteAsync`.
+ * If any segment crosses land, the candidate is rejected with `REJECTED_LAND_INTERSECTION`
+ * and coordinates are suppressed to prevent invalid geometry from appearing on the globe or chart.
+ */
+
+import TinyQueue from 'tinyqueue';
+import { seaRoute } from 'searoute-ts';
+import { DEFAULT_MARNET as marnet20 } from 'searoute-ts/marnet-20km';
+import type { PortRecord } from '../types/port';
 import {
   validateMaritimeRouteAsync,
-  calculateGeodesicDistanceMeters,
   type RouteValidationReport,
-} from "./routeValidationService";
+} from './routeValidationService';
+import { calculateGeodesicDistanceMeters } from '../utils/geo';
 
 export interface MaritimeRouteResult {
-  status: "SUCCESS" | "NO_FEASIBLE_ROUTE" | "REJECTED_LAND_INTERSECTION" | "ERROR";
-  routeName: "Computed Maritime Route";
+  status: 'SUCCESS' | 'NO_FEASIBLE_ROUTE' | 'REJECTED_LAND_INTERSECTION' | 'ERROR';
+  routeName: 'Computed Maritime Route';
   coordinates: [number, number][]; // [longitude, latitude][]
   distanceKm: number;
   durationHours?: number;
@@ -33,20 +58,24 @@ interface PolarGraphData {
   edges: [[number, number], [number, number], number][];
 }
 
-let cachedGraph: {
+interface CachedGraphState {
   nodes: [number, number][];
   adj: Map<number, { nodeIndex: number; weight: number }[]>;
-} | null = null;
+}
 
-let graphLoadingPromise: Promise<any> | null = null;
+let cachedGraph: CachedGraphState | null = null;
+let graphLoadingPromise: Promise<CachedGraphState | null> | null = null;
 
-async function loadPolarWaterGraph() {
+/**
+ * Asynchronously loads and parses the polar navigable water graph JSON asset.
+ */
+async function loadPolarWaterGraph(): Promise<CachedGraphState | null> {
   if (cachedGraph) return cachedGraph;
   if (graphLoadingPromise) return graphLoadingPromise;
 
-  graphLoadingPromise = fetch("/data/polarWaterGraph.json")
+  graphLoadingPromise = fetch('/data/polarWaterGraph.json')
     .then((res) => {
-      if (!res.ok) throw new Error("Failed to load polarWaterGraph.json");
+      if (!res.ok) throw new Error(`Failed to load polarWaterGraph.json: HTTP ${res.status}`);
       return res.json();
     })
     .then((data: PolarGraphData) => {
@@ -73,7 +102,7 @@ async function loadPolarWaterGraph() {
       return cachedGraph;
     })
     .catch((err) => {
-      console.warn("Failed to load polar water graph:", err);
+      console.warn('Failed to load polar water graph:', err);
       cachedGraph = null;
       return null;
     });
@@ -81,11 +110,20 @@ async function loadPolarWaterGraph() {
   return graphLoadingPromise;
 }
 
-// Eager load graph on client
-if (typeof window !== "undefined") {
+// Eager load graph on client to eliminate route calculation delays
+if (typeof window !== 'undefined') {
   loadPolarWaterGraph();
 }
 
+/**
+ * Finds the nearest navigable water node in the graph within a maximum search radius.
+ * Uses bounding box pre-filtering before calculating geodesic distances.
+ *
+ * @param target [longitude, latitude] of origin or destination
+ * @param nodes Array of all graph node coordinates
+ * @param maxDistanceKm Maximum snapping search radius in kilometers (default: 400km)
+ * @returns Index of the nearest node in nodes array, or null if none found within radius
+ */
 function findNearestWaterNodeIndex(
   target: [number, number],
   nodes: [number, number][],
@@ -120,6 +158,16 @@ function findNearestWaterNodeIndex(
   return bestIdx;
 }
 
+/**
+ * Computes the geodesic shortest path between two node indices using Dijkstra's algorithm.
+ * Employs a binary min-heap priority queue via TinyQueue for O((V + E) log V) efficiency.
+ *
+ * @param startIdx Origin node index
+ * @param goalIdx Destination node index
+ * @param nodes Node coordinate lookup array
+ * @param adj Adjacency list mapping node index to weighted neighbors
+ * @returns Array of [longitude, latitude] coordinates along the shortest path, or null if unreachable
+ */
 function dijkstraShortestPath(
   startIdx: number,
   goalIdx: number,
@@ -168,16 +216,20 @@ function dijkstraShortestPath(
 }
 
 const POLAR_DATASET_PROVENANCE = {
-  dataset: "High-Resolution Navigable Polar Water Graph (GEBCO 2024 / SCAR ADD / Natural Earth 10m)",
-  version: "2026.1 Polar Navigation Release",
-  source: "Scientific Committee on Antarctic Research (SCAR) / GEBCO / Natural Earth GIS",
-  license: "Public Domain / CC-BY 4.0",
-  method: "Geodesic shortest path over 100% water-constrained hydrodynamic polar mesh",
+  dataset: 'High-Resolution Navigable Polar Water Graph (GEBCO 2024 / SCAR ADD / Natural Earth 10m)',
+  version: '2026.1 Polar Navigation Release',
+  source: 'Scientific Committee on Antarctic Research (SCAR) / GEBCO / Natural Earth GIS',
+  license: 'Public Domain / CC-BY 4.0',
+  method: 'Geodesic shortest path over 100% water-constrained hydrodynamic polar mesh',
 };
 
 /**
- * Computes an authentic, water-constrained maritime route between two real WPI ports.
- * Preserves 100% of graph vertices and strictly validates the continuous LineString.
+ * Computes an authentic, water-constrained maritime route between two real NGA WPI ports.
+ * Preserves 100% of graph vertices and strictly validates the continuous LineString against land barriers.
+ *
+ * @param origin Departure NGA PortRecord
+ * @param destination Destination NGA PortRecord
+ * @returns MaritimeRouteResult containing route waypoints, length, duration, and provenance
  */
 export async function computeMaritimeRoute(
   origin: PortRecord,
@@ -185,28 +237,28 @@ export async function computeMaritimeRoute(
 ): Promise<MaritimeRouteResult> {
   if (!origin || !destination) {
     return {
-      status: "NO_FEASIBLE_ROUTE",
-      routeName: "Computed Maritime Route",
+      status: 'NO_FEASIBLE_ROUTE',
+      routeName: 'Computed Maritime Route',
       coordinates: [],
       distanceKm: 0,
       candidateCountAttempted: 0,
       rawNodeCount: 0,
       finalNodeCount: 0,
-      failingReason: "Both departure and destination ports are required",
+      failingReason: 'Both departure and destination ports are required',
       provenance: POLAR_DATASET_PROVENANCE,
     };
   }
 
   if (origin.wpiNumber === destination.wpiNumber) {
     return {
-      status: "NO_FEASIBLE_ROUTE",
-      routeName: "Computed Maritime Route",
+      status: 'NO_FEASIBLE_ROUTE',
+      routeName: 'Computed Maritime Route',
       coordinates: [],
       distanceKm: 0,
       candidateCountAttempted: 0,
       rawNodeCount: 0,
       finalNodeCount: 0,
-      failingReason: "Departure and destination ports cannot be the same",
+      failingReason: 'Departure and destination ports cannot be the same',
       provenance: POLAR_DATASET_PROVENANCE,
     };
   }
@@ -216,7 +268,9 @@ export async function computeMaritimeRoute(
 
   const graph = cachedGraph || (await loadPolarWaterGraph());
 
+  // --------------------------------------------------------------------------
   // 1. Primary Strategy: High-Resolution Polar Navigable Water Graph
+  // --------------------------------------------------------------------------
   if (graph) {
     const startNodeIdx = findNearestWaterNodeIndex(originCoords, graph.nodes);
     const goalNodeIdx = findNearestWaterNodeIndex(destCoords, graph.nodes);
@@ -247,13 +301,13 @@ export async function computeMaritimeRoute(
           destination
         );
 
-        if (validationReport.overallResult === "PASS") {
+        if (validationReport.overallResult === 'PASS') {
           return {
-            status: "SUCCESS",
-            routeName: "Computed Maritime Route",
+            status: 'SUCCESS',
+            routeName: 'Computed Maritime Route',
             coordinates: fullCoords,
             distanceKm: totalDistKm,
-            durationHours: totalDistKm / 27.78, // ~15 knots
+            durationHours: totalDistKm / 27.78, // ~15 knots nominal speed
             candidateCountAttempted: 1,
             rawNodeCount: pathNodes.length,
             finalNodeCount: fullCoords.length,
@@ -265,19 +319,21 @@ export async function computeMaritimeRoute(
     }
   }
 
-  // 2. Secondary Strategy: Eurostat MARNET 20km (for Northern / Open Oceanic / Fjord Ports)
+  // --------------------------------------------------------------------------
+  // 2. Secondary Strategy: Eurostat MARNET 20km (for Northern / Fjord Ports)
+  // --------------------------------------------------------------------------
   try {
     const rawRoute = seaRoute(originCoords, destCoords, {
       network: marnet20,
-      units: "kilometers",
-      antimeridian: "split",
+      units: 'kilometers',
+      antimeridian: 'split',
     });
 
     if (rawRoute && rawRoute.geometry && rawRoute.geometry.coordinates) {
       const netCoords = (rawRoute.geometry.coordinates as unknown) as [number, number][];
       const fullCoords: [number, number][] = [originCoords, ...netCoords, destCoords];
       let distanceKm =
-        typeof rawRoute.properties?.length === "number" ? rawRoute.properties.length : 0;
+        typeof rawRoute.properties?.length === 'number' ? rawRoute.properties.length : 0;
 
       if (distanceKm <= 0) {
         for (let i = 0; i < fullCoords.length - 1; i++) {
@@ -294,15 +350,15 @@ export async function computeMaritimeRoute(
       const validationReport = await validateMaritimeRouteAsync(
         fullCoords,
         distanceKm,
-        "Eurostat MARNET 20km",
+        'Eurostat MARNET 20km',
         origin,
         destination
       );
 
-      if (validationReport.overallResult === "PASS") {
+      if (validationReport.overallResult === 'PASS') {
         return {
-          status: "SUCCESS",
-          routeName: "Computed Maritime Route",
+          status: 'SUCCESS',
+          routeName: 'Computed Maritime Route',
           coordinates: fullCoords,
           distanceKm,
           durationHours: distanceKm / 27.78,
@@ -311,20 +367,22 @@ export async function computeMaritimeRoute(
           finalNodeCount: fullCoords.length,
           validationReport,
           provenance: {
-            dataset: "Eurostat MARNET 20km Mesh",
-            version: "2025 Release",
-            source: "European Commission (Eurostat)",
-            license: "EUPL-1.2",
-            method: "Dijkstra shortest path",
+            dataset: 'Eurostat MARNET 20km Mesh',
+            version: '2025 Release',
+            source: 'European Commission (Eurostat)',
+            license: 'EUPL-1.2',
+            method: 'Dijkstra shortest path',
           },
         };
       }
     }
   } catch (err) {
-    console.debug("MARNET fallback error:", err);
+    console.debug('MARNET fallback error:', err);
   }
 
-  // 3. Tertiary Strategy: Direct Line-of-Sight Check (for adjacent local ports / open roadsteads)
+  // --------------------------------------------------------------------------
+  // 3. Tertiary Strategy: Direct Line-of-Sight Check (for local adjacent ports)
+  // --------------------------------------------------------------------------
   const directDistKm =
     calculateGeodesicDistanceMeters(
       originCoords[0],
@@ -338,15 +396,15 @@ export async function computeMaritimeRoute(
     const directValidation = await validateMaritimeRouteAsync(
       directCoords,
       directDistKm,
-      "Direct Coastal Channel",
+      'Direct Coastal Channel',
       origin,
       destination
     );
 
-    if (directValidation.overallResult === "PASS") {
+    if (directValidation.overallResult === 'PASS') {
       return {
-        status: "SUCCESS",
-        routeName: "Computed Maritime Route",
+        status: 'SUCCESS',
+        routeName: 'Computed Maritime Route',
         coordinates: directCoords,
         distanceKm: directDistKm,
         durationHours: directDistKm / 27.78,
@@ -355,25 +413,26 @@ export async function computeMaritimeRoute(
         finalNodeCount: 2,
         validationReport: directValidation,
         provenance: {
-          dataset: "Direct Water Corridor",
-          version: "2026.1",
-          source: "Direct Geodesic Coastal Vector",
-          license: "Public Domain",
-          method: "Direct coastal line-of-sight validation",
+          dataset: 'Direct Water Corridor',
+          version: '2026.1',
+          source: 'Direct Geodesic Coastal Vector',
+          license: 'Public Domain',
+          method: 'Direct coastal line-of-sight validation',
         },
       };
     }
   }
 
+  // Strict hard gate: suppress invalid geometry if no navigable water route exists
   return {
-    status: "REJECTED_LAND_INTERSECTION",
-    routeName: "Computed Maritime Route",
-    coordinates: [], // Strict hard gate: suppress invalid geometry
+    status: 'REJECTED_LAND_INTERSECTION',
+    routeName: 'Computed Maritime Route',
+    coordinates: [],
     distanceKm: 0,
     candidateCountAttempted: 3,
     rawNodeCount: 0,
     finalNodeCount: 0,
-    failingReason: "No water-constrained navigable route found that avoids land barriers",
+    failingReason: 'No water-constrained navigable route found that avoids land barriers',
     provenance: POLAR_DATASET_PROVENANCE,
   };
 }

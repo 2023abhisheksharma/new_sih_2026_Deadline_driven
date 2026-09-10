@@ -1,43 +1,73 @@
+/**
+ * AntarcticOverview Page
+ *
+ * Primary Mission Planning & Situational Awareness Dashboard for Antarctic Polar Navigation.
+ *
+ * Key System Capabilities:
+ * 1. Dual Viewport Engines:
+ *    - 3D Globe: CesiumJS WebGL globe with hardware-accelerated instanced primitives (40,000+ icebergs).
+ *    - 2D Tactical: High-performance HTML5 Canvas radar display with real coastlines & vessel proximity rings.
+ * 2. Deep URL Query Route Synchronization:
+ *    - Automatically synchronizes application view mode (`?view=tactical` vs `?view=globe`) and layer filter
+ *      (`?filter=all|moving|fixed|ports`) with browser history (`pushState` / `popstate`).
+ * 3. 3-Tier Maritime Navigation Routing:
+ *    - Computes safe polar navigational tracks avoiding landmasses and grounded ice hazards.
+ * 4. Spatial Ice Hazard Risk Assessment:
+ *    - Evaluates proximity, crossing angles, and collision cones for USNIC macro polygons,
+ *      Sentinel-1 SAR grounded targets, and BYU/NIC historical drift tracks.
+ * 5. Deterministic Vessel Kinematics Simulation:
+ *    - Continuous Great Circle interpolation along route geometry at selectable time-multipliers (1x to 30x).
+ */
+
 import { useRef, useState, useEffect, type FC } from 'react';
-import { CesiumGlobe, CesiumGlobeRef } from '../components/CesiumGlobe';
-import { VesselInfoCard } from '../components/VesselInfoCard';
-import { PortAnnotation } from '../components/PortAnnotation';
-import { DepartureAnnotation } from '../components/DepartureAnnotation';
-import { DestinationAnnotation } from '../components/DestinationAnnotation';
-import { DriftingIcebergAnnotation } from '../components/DriftingIcebergAnnotation';
-import { RouteSummaryPanel } from '../components/RouteSummaryPanel';
-import type { VesselConfiguration } from '../config/vessel';
-import { DEMO_VESSEL_CONFIG } from '../config/vessel';
-import type { PortRecord } from '../types/port';
-import type { IcebergRecord } from '../types/iceberg';
-import type { Sentinel1GroundedIcebergRecord } from '../types/sentinel1Iceberg';
-import type { DriftingIcebergTrajectoryRecord } from '../types/driftingIceberg';
-import type { IceHazardAnalysisReport, IcebergHazardItem } from '../types/iceHazard';
+import {
+  CesiumGlobe,
+  CesiumGlobeRef,
+  Tactical2DView,
+  VesselInfoCard,
+  PortAnnotation,
+  DepartureAnnotation,
+  DestinationAnnotation,
+  DriftingIcebergAnnotation,
+  RouteSummaryPanel,
+  LayerHighlightToggle,
+} from '../components';
+import { DEMO_VESSEL_CONFIG, VesselConfiguration } from '../config/vessel';
+import type {
+  PortRecord,
+  IcebergRecord,
+  Sentinel1GroundedIcebergRecord,
+  DriftingIcebergTrajectoryRecord,
+  IceHazardAnalysisReport,
+  IcebergHazardItem,
+  MaritimeRouteResult,
+  RouteGeometryProfile,
+  RouteSimulationPoint,
+  LayerFilterMode,
+} from '../types';
 import { loadPortDataset } from '../services/portService';
 import { loadIcebergDataset } from '../services/icebergService';
 import { loadSentinel1GroundedIcebergDataset } from '../services/sentinel1IcebergService';
 import { loadDriftingIcebergDataset } from '../services/driftingIcebergService';
-import { computeMaritimeRoute, type MaritimeRouteResult } from '../services/maritimeRoutingService';
+import { computeMaritimeRoute } from '../services/maritimeRoutingService';
 import { analyzeRouteIcebergHazards } from '../services/iceHazardService';
 import {
   buildRouteGeometryProfile,
   evaluateSimulationPoint,
-  type RouteGeometryProfile,
-  type RouteSimulationPoint,
 } from '../services/routeSimulationService';
-import { Tactical2DView } from '../components/Tactical2DView';
-import { LayerHighlightToggle } from '../components/LayerHighlightToggle';
-import type { LayerFilterMode } from '../types/navigation';
 
 export const AntarcticOverview: FC = () => {
   const globeRef = useRef<CesiumGlobeRef>(null);
   const [activeView, setActiveView] = useState<'3D_GLOBE' | '2D_TACTICAL'>('3D_GLOBE');
   const [layerFilter, setLayerFilter] = useState<LayerFilterMode>('ALL');
 
+  // Scientific Datasets
   const [ports, setPorts] = useState<PortRecord[]>([]);
   const [icebergs, setIcebergs] = useState<IcebergRecord[]>([]);
   const [sentinel1Icebergs, setSentinel1Icebergs] = useState<Sentinel1GroundedIcebergRecord[]>([]);
   const [driftingIcebergs, setDriftingIcebergs] = useState<DriftingIcebergTrajectoryRecord[]>([]);
+
+  // Selection & 2D Screen-space Projection Overlays
   const [selectedDriftingIceberg, setSelectedDriftingIceberg] = useState<DriftingIcebergTrajectoryRecord | null>(null);
   const [driftingIcebergScreenPos, setDriftingIcebergScreenPos] = useState<{ x: number; y: number } | null>(null);
   const [selectedPort, setSelectedPort] = useState<PortRecord | null>(null);
@@ -49,6 +79,7 @@ export const AntarcticOverview: FC = () => {
   const [destinationPort, setDestinationPort] = useState<PortRecord | null>(null);
   const [destinationScreenPos, setDestinationScreenPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Maritime Route & Hazard Analysis
   const [routeResult, setRouteResult] = useState<MaritimeRouteResult | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState<boolean>(false);
 
@@ -64,6 +95,7 @@ export const AntarcticOverview: FC = () => {
   const [selectedVessel, setSelectedVessel] = useState<VesselConfiguration | null>(null);
   const [vesselScreenPos, setVesselScreenPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Status & Feedback Toast
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const feedbackTimerRef = useRef<number | null>(null);
 
@@ -78,8 +110,59 @@ export const AntarcticOverview: FC = () => {
     }, 2800);
   };
 
+  // ─── URL Query Route Synchronization ─────────────────────────────────────
+  // Parse initial view and filter from URL search parameters on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view')?.toLowerCase();
+    const filterParam = params.get('filter')?.toUpperCase();
+
+    if (viewParam === 'tactical' || viewParam === '2d') {
+      setActiveView('2D_TACTICAL');
+    }
+
+    if (filterParam === 'MOVING' || filterParam === 'FIXED' || filterParam === 'PORTS' || filterParam === 'ALL') {
+      setLayerFilter(filterParam as LayerFilterMode);
+    }
+
+    // Support browser Back/Forward navigation
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search);
+      const v = p.get('view')?.toLowerCase();
+      const f = p.get('filter')?.toUpperCase();
+      setActiveView(v === 'tactical' || v === '2d' ? '2D_TACTICAL' : '3D_GLOBE');
+      if (f === 'MOVING' || f === 'FIXED' || f === 'PORTS' || f === 'ALL') {
+        setLayerFilter(f as LayerFilterMode);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Update browser URL query params without triggering full page reload
+  const updateUrlParams = (view: '3D_GLOBE' | '2D_TACTICAL', filter: LayerFilterMode) => {
+    const params = new URLSearchParams(window.location.search);
+    if (view === '2D_TACTICAL') {
+      params.set('view', 'tactical');
+    } else {
+      params.delete('view');
+    }
+    if (filter !== 'ALL') {
+      params.set('filter', filter.toLowerCase());
+    } else {
+      params.delete('filter');
+    }
+    const newSearch = params.toString();
+    const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
+    if (window.location.search !== (newSearch ? `?${newSearch}` : '')) {
+      window.history.pushState(null, '', newUrl);
+    }
+  };
+
   const handleSelectLayerFilter = (mode: LayerFilterMode) => {
     setLayerFilter(mode);
+    updateUrlParams(activeView, mode);
     if (mode === 'PORTS') {
       showToast(`Isolated & Highlighted: All Maritime Ports (${ports.length > 0 ? ports.length.toLocaleString() : '3,807'} points)`);
     } else if (mode === 'MOVING') {
@@ -441,11 +524,13 @@ export const AntarcticOverview: FC = () => {
       return;
     }
     setActiveView('2D_TACTICAL');
+    updateUrlParams('2D_TACTICAL', layerFilter);
     showToast("Switched to 2D Tactical Navigation View");
   };
 
   const handleBackToGlobe = () => {
     setActiveView('3D_GLOBE');
+    updateUrlParams('3D_GLOBE', layerFilter);
     showToast("Returned to 3D Global Overview");
   };
 
@@ -466,9 +551,9 @@ export const AntarcticOverview: FC = () => {
     setSimStatus('IDLE');
   };
 
-  const handleSeekDistance = (dist: number) => {
+  const handleSeekDistance = (distMeters: number) => {
     if (!routeProfile) return;
-    const clamped = Math.max(0, Math.min(routeProfile.totalDistanceMeters, dist));
+    const clamped = Math.max(0, Math.min(routeProfile.totalDistanceMeters, distMeters));
     setSimDistanceMeters(clamped);
     if (clamped >= routeProfile.totalDistanceMeters) {
       setSimStatus('COMPLETED');

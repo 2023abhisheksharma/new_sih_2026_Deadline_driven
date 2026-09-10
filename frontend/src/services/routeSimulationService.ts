@@ -1,48 +1,55 @@
-import { calculateGeodesicDistanceMeters } from './iceHazardService';
+/**
+ * Route Simulation & Progress Interpolation Service
+ * -------------------------------------------------
+ * Manages deterministic vessel progression, bearing calculation, and spatial
+ * interpolation along pre-calculated maritime routes.
+ *
+ * Provides smooth 60fps positioning by pre-computing cumulative geodesic distance
+ * profiles and interpolating current vessel position, true heading, and voyage
+ * completion metrics.
+ */
+
+import { calculateGeodesicDistanceMeters, calculateBearingDegrees } from '../utils/geo';
+
+// Re-export calculateBearingDegrees for backward compatibility
+export { calculateBearingDegrees };
 
 export interface RouteSimulationPoint {
-  coordinate: [number, number]; // [longitude, latitude]
+  /** Current interpolated vessel position: [longitude, latitude] in degrees */
+  coordinate: [number, number];
+  /** True heading azimuth in degrees [0, 360) clockwise from North */
   headingDegrees: number;
+  /** Zero-based index of the active segment: [segmentIndex -> segmentIndex + 1] */
   segmentIndex: number;
+  /** Distance traveled from departure in meters */
   distanceTraveledMeters: number;
+  /** Distance remaining to destination in meters */
   distanceRemainingMeters: number;
+  /** Total route length in meters */
   totalDistanceMeters: number;
+  /** Percentage of route completed [0.0, 100.0] */
   progressPercent: number;
+  /** Whether the destination waypoint has been reached */
   isCompleted: boolean;
 }
 
 export interface RouteGeometryProfile {
+  /** Array of route waypoints: [[lon, lat], ...] */
   coordinates: [number, number][];
-  segmentDistances: number[]; // meters per segment
-  cumulativeDistances: number[]; // meters at each vertex
+  /** Length in meters of each segment i -> i+1 */
+  segmentDistances: number[];
+  /** Cumulative distance in meters from start at each vertex index */
+  cumulativeDistances: number[];
+  /** Total route length in meters */
   totalDistanceMeters: number;
 }
 
-const toRad = (deg: number) => (deg * Math.PI) / 180.0;
-
 /**
- * Calculates initial great-circle bearing from point 1 to point 2 in degrees [0, 360).
- */
-export function calculateBearingDegrees(
-  lon1: number,
-  lat1: number,
-  lon2: number,
-  lat2: number
-): number {
-  const phi1 = toRad(lat1);
-  const phi2 = toRad(lat2);
-  const dlambda = toRad(lon2 - lon1);
-
-  const y = Math.sin(dlambda) * Math.cos(phi2);
-  const x =
-    Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dlambda);
-
-  const brng = (Math.atan2(y, x) * 180.0) / Math.PI;
-  return (brng + 360.0) % 360.0;
-}
-
-/**
- * Builds distance profile along route vertices.
+ * Pre-computes the cumulative distance profile for a series of route waypoints.
+ * Enables O(1) or O(log N) segment search during animation frame evaluations.
+ *
+ * @param coordinates Ordered array of [lon, lat] waypoints
+ * @returns RouteGeometryProfile or null if fewer than 2 points
  */
 export function buildRouteGeometryProfile(
   coordinates: [number, number][]
@@ -71,7 +78,12 @@ export function buildRouteGeometryProfile(
 }
 
 /**
- * Interpolates vessel position, heading, and metrics along the route at a given cumulative distance.
+ * Interpolates vessel position, heading, and telemetry metrics along a route profile
+ * at a given cumulative distance.
+ *
+ * @param profile Pre-built RouteGeometryProfile
+ * @param distanceMeters Target distance from start in meters
+ * @returns Evaluated RouteSimulationPoint with position, bearing, and metrics
  */
 export function evaluateSimulationPoint(
   profile: RouteGeometryProfile,
@@ -79,6 +91,7 @@ export function evaluateSimulationPoint(
 ): RouteSimulationPoint {
   const { coordinates, cumulativeDistances, segmentDistances, totalDistanceMeters } = profile;
 
+  // Boundary condition 1: At or before start
   if (totalDistanceMeters <= 0 || distanceMeters <= 0) {
     const heading =
       coordinates.length >= 2
@@ -102,6 +115,7 @@ export function evaluateSimulationPoint(
     };
   }
 
+  // Boundary condition 2: Reached or exceeded destination
   if (distanceMeters >= totalDistanceMeters) {
     const lastIdx = coordinates.length - 1;
     const heading =
@@ -126,7 +140,7 @@ export function evaluateSimulationPoint(
     };
   }
 
-  // Find active segment
+  // Find active segment [i -> i+1] where distanceMeters falls
   let segIdx = 0;
   for (let i = 0; i < segmentDistances.length; i++) {
     if (distanceMeters <= cumulativeDistances[i + 1]) {
@@ -143,7 +157,7 @@ export function evaluateSimulationPoint(
   const [aLon, aLat] = coordinates[segIdx];
   const [bLon, bLat] = coordinates[segIdx + 1];
 
-  // Geodesic Linear Interpolation along segment
+  // Geodesic Linear Interpolation along active segment
   const curLon = aLon + (bLon - aLon) * clampedFraction;
   const curLat = aLat + (bLat - aLat) * clampedFraction;
   const heading = calculateBearingDegrees(aLon, aLat, bLon, bLat);
