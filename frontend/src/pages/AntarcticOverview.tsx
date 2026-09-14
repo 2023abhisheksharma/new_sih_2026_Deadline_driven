@@ -50,7 +50,7 @@ import { loadPortDataset } from '../services/portService';
 import { loadIcebergDataset } from '../services/icebergService';
 import { loadSentinel1GroundedIcebergDataset } from '../services/sentinel1IcebergService';
 import { loadDriftingIcebergDataset } from '../services/driftingIcebergService';
-import { computeMaritimeRoute } from '../services/maritimeRoutingService';
+import { requestMaritimeRoute, cancelCurrentRouting } from '../services/maritimeRoutingWorkerService';
 import { analyzeRouteIcebergHazards } from '../services/iceHazardService';
 import {
   buildRouteGeometryProfile,
@@ -296,7 +296,7 @@ export const AntarcticOverview: FC = () => {
       }
 
       setIsCalculatingRoute(true);
-      computeMaritimeRoute(departurePort, destinationPort)
+      requestMaritimeRoute(departurePort, destinationPort)
         .then((res) => {
           // Drop response if component unmounted or if a newer calculation request was initiated
           if (cancelled || currentRequestId !== routeRequestIdRef.current) {
@@ -323,8 +323,8 @@ export const AntarcticOverview: FC = () => {
           }
         })
         .catch((err) => {
-          // Drop response if component unmounted or if a newer calculation request was initiated
-          if (cancelled || currentRequestId !== routeRequestIdRef.current) {
+          // Drop response if component unmounted, aborted, or if a newer calculation request was initiated
+          if (cancelled || currentRequestId !== routeRequestIdRef.current || err?.message === 'ABORTED_BY_NEWER_REQUEST') {
             return;
           }
 
@@ -342,6 +342,7 @@ export const AntarcticOverview: FC = () => {
 
     return () => {
       cancelled = true;
+      cancelCurrentRouting();
     };
   }, [departurePort, destinationPort]);
 

@@ -35,6 +35,9 @@ import {
   calculateBearingDeg,
   calculateDestinationPoint,
   pointInPolygon,
+  kmToNauticalMiles,
+  calculateTurnDirection,
+  pointToSegmentGeodesicDistanceMeters,
 } from '../utils/geo';
 import { isSegmentWaterSafeWithDock } from './terminalApproachService';
 import type { LandRing } from './routeValidationService';
@@ -441,6 +444,26 @@ export function repairLandCrossingSegment(
     }
   }
 
+  // Compound 2-Point Detour for wide island clusters or broad peninsulas
+  // (DetourPtA at t=0.30 -> DetourPtB at t=0.70)
+  if (distKm > 15.0 && maxDepth >= 2) {
+    const ptA_base = slerpCoordinates(p1, p2, 0.30);
+    const ptB_base = slerpCoordinates(p1, p2, 0.70);
+    for (const offsetKm of [12.0, 25.0, 45.0, 80.0]) {
+      if (offsetKm > Math.max(60.0, distKm * 1.5)) continue;
+      for (const bearing of [perpLeft, perpRight]) {
+        const detourA = calculateDestinationPoint(ptA_base, offsetKm, bearing);
+        const detourB = calculateDestinationPoint(ptB_base, offsetKm, bearing);
+
+        if (!isArcWaterSafe(p1, detourA, rings, repairClearance)) continue;
+        if (!isArcWaterSafe(detourA, detourB, rings, repairClearance)) continue;
+        if (!isArcWaterSafe(detourB, p2, rings, repairClearance)) continue;
+
+        return [detourA, detourB];
+      }
+    }
+  }
+
   return []; // No repair found
 }
 
@@ -790,6 +813,237 @@ export function applyWheelOverFillets(
   smoothed.push(coords[coords.length - 2]);
   smoothed.push(coords[coords.length - 1]);
   return smoothed;
+}
+
+export interface NavigationalWaypoint {
+  wpIndex: number;
+  name: string;
+  coords: [number, number];
+  legDistanceNm: number;
+  legDistanceKm: number;
+  trueBearingDeg: number;
+  turnAngleDeg: number;
+  turnDirection: 'PORT' | 'STBD' | 'STRAIGHT';
+  cumulativeNm: number;
+  cumulativeKm: number;
+  zone: 'POLAR' | 'SUB_ANTARCTIC' | 'OPEN_OCEAN';
+}
+
+export interface VoyageIceProfile {
+  totalDistanceNm: number;
+  totalDistanceKm: number;
+  openWaterDistanceNm: number;
+  subAntarcticDistanceNm: number;
+  polarZoneDistanceNm: number;
+  nominalDurationHours: number;
+  iceAdjustedDurationHours: number;
+  recommendedSpeedOpenWaterKnots: number;
+  recommendedSpeedPolarKnots: number;
+  estimatedFuelMdoTons: number;
+  minCoastalClearanceKm: number;
+}
+
+/**
+ * Extracts authentic bridge navigation waypoints and leg statistics from an assembled maritime trajectory.
+ * Filters out minor micro-chords, identifying genuine course alterations, terminal approach points,
+ * and polar convergence zone transitions.
+ */
+export function extractNavigationalWaypoints(
+  coordinates: [number, number][],
+  minTurnDeg: number = 3.0,
+  minLegKm: number = 5.0
+): NavigationalWaypoint[] {
+  if (!coordinates || coordinates.length === 0) return [];
+  if (coordinates.length === 1) {
+    return [{
+      wpIndex: 1,
+      name: 'BERTH_DEP',
+      coords: coordinates[0],
+      legDistanceNm: 0,
+      legDistanceKm: 0,
+      trueBearingDeg: 0,
+      turnAngleDeg: 0,
+      turnDirection: 'STRAIGHT',
+      cumulativeNm: 0,
+      cumulativeKm: 0,
+      zone: coordinates[0][1] <= -60.0 ? 'POLAR' : (coordinates[0][1] <= -50.0 ? 'SUB_ANTARCTIC' : 'OPEN_OCEAN'),
+    }];
+  }
+
+  const waypoints: NavigationalWaypoint[] = [];
+  const N = coordinates.length;
+
+  let cumKm = 0;
+  let prevWpIdx = 0;
+
+  // 1. Departure Berthing Waypoint
+  const depBearing = calculateBearingDeg(coordinates[0][0], coordinates[0][1], coordinates[1][0], coordinates[1][1]);
+  waypoints.push({
+    wpIndex: 1,
+    name: 'BERTH_DEP',
+    coords: coordinates[0],
+    legDistanceNm: 0,
+    legDistanceKm: 0,
+    trueBearingDeg: Math.round(depBearing),
+    turnAngleDeg: 0,
+    turnDirection: 'STRAIGHT',
+    cumulativeNm: 0,
+    cumulativeKm: 0,
+    zone: coordinates[0][1] <= -60.0 ? 'POLAR' : (coordinates[0][1] <= -50.0 ? 'SUB_ANTARCTIC' : 'OPEN_OCEAN'),
+  });
+
+  // Intermediate Waypoints
+  for (let i = 1; i < N - 1; i++) {
+    const pPrev = coordinates[prevWpIdx];
+    const pCurr = coordinates[i];
+    const pNext = coordinates[i + 1];
+
+    const legDist = calculateGeodesicDistanceMeters(pPrev[0], pPrev[1], pCurr[0], pCurr[1]) / 1000.0;
+    if (legDist < minLegKm && i < N - 2) {
+      continue;
+    }
+
+    const bIn = calculateBearingDeg(pPrev[0], pPrev[1], pCurr[0], pCurr[1]);
+    const bOut = calculateBearingDeg(pCurr[0], pCurr[1], pNext[0], pNext[1]);
+    let turnAngle = Math.abs(bOut - bIn);
+    if (turnAngle > 180.0) turnAngle = 360.0 - turnAngle;
+
+    const crossesPolarBorder = (pPrev[1] > -60.0 && pCurr[1] <= -60.0) || (pPrev[1] > -50.0 && pCurr[1] <= -50.0);
+
+    if (turnAngle >= minTurnDeg || crossesPolarBorder || i === 1 || i === N - 2) {
+      cumKm += legDist;
+      const turnDir = calculateTurnDirection(bIn, bOut);
+      const zone = pCurr[1] <= -60.0 ? 'POLAR' : (pCurr[1] <= -50.0 ? 'SUB_ANTARCTIC' : 'OPEN_OCEAN');
+      let name = `WP${String(waypoints.length).padStart(2, '0')}`;
+      if (i === 1) name = 'FAIRWAY_DEP';
+      else if (i === N - 2) name = 'FAIRWAY_ARR';
+      else if (crossesPolarBorder) name = 'CONVERGENCE';
+
+      waypoints.push({
+        wpIndex: waypoints.length + 1,
+        name,
+        coords: pCurr,
+        legDistanceKm: Math.round(legDist * 10) / 10,
+        legDistanceNm: Math.round(kmToNauticalMiles(legDist) * 10) / 10,
+        trueBearingDeg: Math.round(bOut),
+        turnAngleDeg: Math.round(turnAngle * 10) / 10,
+        turnDirection: turnDir,
+        cumulativeKm: Math.round(cumKm * 10) / 10,
+        cumulativeNm: Math.round(kmToNauticalMiles(cumKm) * 10) / 10,
+        zone,
+      });
+      prevWpIdx = i;
+    }
+  }
+
+  // Final Destination Waypoint
+  const pPrev = coordinates[prevWpIdx];
+  const pDest = coordinates[N - 1];
+  const finalLegDist = calculateGeodesicDistanceMeters(pPrev[0], pPrev[1], pDest[0], pDest[1]) / 1000.0;
+  cumKm += finalLegDist;
+  const finalBearing = calculateBearingDeg(pPrev[0], pPrev[1], pDest[0], pDest[1]);
+
+  waypoints.push({
+    wpIndex: waypoints.length + 1,
+    name: 'BERTH_ARR',
+    coords: pDest,
+    legDistanceKm: Math.round(finalLegDist * 10) / 10,
+    legDistanceNm: Math.round(kmToNauticalMiles(finalLegDist) * 10) / 10,
+    trueBearingDeg: Math.round(finalBearing),
+    turnAngleDeg: 0,
+    turnDirection: 'STRAIGHT',
+    cumulativeKm: Math.round(cumKm * 10) / 10,
+    cumulativeNm: Math.round(kmToNauticalMiles(cumKm) * 10) / 10,
+    zone: pDest[1] <= -60.0 ? 'POLAR' : (pDest[1] <= -50.0 ? 'SUB_ANTARCTIC' : 'OPEN_OCEAN'),
+  });
+
+  return waypoints;
+}
+
+/**
+ * Computes an operational voyage profile for a Polar Class 4 (PC4) vessel.
+ * Factors in open-water vs marginal ice zone vs deep Antarctic pack ice,
+ * recommended operating speeds, estimated fuel consumption, and coastal clearance.
+ */
+export function computeVoyageProfile(
+  coordinates: [number, number][],
+  rings: LandRing[]
+): VoyageIceProfile {
+  let totalDistKm = 0;
+  let openWaterKm = 0;
+  let subAntarcticKm = 0;
+  let polarZoneKm = 0;
+
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const p1 = coordinates[i];
+    const p2 = coordinates[i + 1];
+    const legDist = calculateGeodesicDistanceMeters(p1[0], p1[1], p2[0], p2[1]) / 1000.0;
+    totalDistKm += legDist;
+
+    const midLat = (p1[1] + p2[1]) / 2.0;
+    if (midLat <= -60.0) {
+      polarZoneKm += legDist;
+    } else if (midLat <= -50.0) {
+      subAntarcticKm += legDist;
+    } else {
+      openWaterKm += legDist;
+    }
+  }
+
+  const totalNm = kmToNauticalMiles(totalDistKm);
+  const openWaterNm = kmToNauticalMiles(openWaterKm);
+  const subAntarcticNm = kmToNauticalMiles(subAntarcticKm);
+  const polarZoneNm = kmToNauticalMiles(polarZoneKm);
+
+  // Speed assumptions for PC4 vessel
+  const speedOpenWaterKnots = 15.0;
+  const speedSubAntarcticKnots = 12.0;
+  const speedPolarKnots = 8.5; // Ice navigation / reduced speed in pack ice
+
+  const nominalDurationHours = totalNm / speedOpenWaterKnots;
+  const iceAdjustedDurationHours =
+    (openWaterNm / speedOpenWaterKnots) +
+    (subAntarcticNm / speedSubAntarcticKnots) +
+    (polarZoneNm / speedPolarKnots);
+
+  // Fuel consumption: PC4 heavy icebreaker consumes ~35 metric tons/day in open water,
+  // ~48 MT/day in icebreaking mode
+  const openWaterDays = (openWaterNm / speedOpenWaterKnots + subAntarcticNm / speedSubAntarcticKnots) / 24.0;
+  const polarDays = (polarZoneNm / speedPolarKnots) / 24.0;
+  const estimatedFuelMdoTons = Math.round((openWaterDays * 35.0 + polarDays * 48.0) * 10) / 10;
+
+  // Closest coastal clearance check
+  let minClearanceKm = 999.0;
+  if (rings && rings.length > 0) {
+    const sampleCount = Math.min(30, coordinates.length);
+    const step = Math.max(1, Math.floor(coordinates.length / sampleCount));
+    for (let i = 0; i < coordinates.length; i += step) {
+      const pt = coordinates[i];
+      for (let r = 0; r < Math.min(15, rings.length); r++) {
+        const ring = rings[r].ring;
+        for (let k = 0; k < ring.length - 1; k += 6) {
+          const d = pointToSegmentGeodesicDistanceMeters(pt[0], pt[1], ring[k][0], ring[k][1], ring[k + 1][0], ring[k + 1][1]) / 1000.0;
+          if (d < minClearanceKm) {
+            minClearanceKm = d;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    totalDistanceNm: Math.round(totalNm * 10) / 10,
+    totalDistanceKm: Math.round(totalDistKm * 10) / 10,
+    openWaterDistanceNm: Math.round(openWaterNm * 10) / 10,
+    subAntarcticDistanceNm: Math.round(subAntarcticNm * 10) / 10,
+    polarZoneDistanceNm: Math.round(polarZoneNm * 10) / 10,
+    nominalDurationHours: Math.round(nominalDurationHours * 10) / 10,
+    iceAdjustedDurationHours: Math.round(iceAdjustedDurationHours * 10) / 10,
+    recommendedSpeedOpenWaterKnots: speedOpenWaterKnots,
+    recommendedSpeedPolarKnots: speedPolarKnots,
+    estimatedFuelMdoTons,
+    minCoastalClearanceKm: Math.round(minClearanceKm * 10) / 10,
+  };
 }
 
 

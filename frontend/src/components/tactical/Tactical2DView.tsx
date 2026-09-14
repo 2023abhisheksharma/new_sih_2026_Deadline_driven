@@ -425,9 +425,9 @@ const Tactical2DViewComponent: FC<Tactical2DViewProps> = ({
     ) {
       const coords = routeResult.coordinates;
 
-      // Subtle Route Navigation Corridor Buffer (5 km)
-      ctx.lineWidth = Math.max(8, 10000 / zoomLevel);
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.04)';
+      // Route Navigation Corridor Buffer (Safety Fairway Swath)
+      ctx.lineWidth = Math.max(12, 14000 / zoomLevel);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
       ctx.beginPath();
       const [initX, initY] = projectToScreen(coords[0][0], coords[0][1], width, height);
       ctx.moveTo(initX, initY);
@@ -480,18 +480,44 @@ const Tactical2DViewComponent: FC<Tactical2DViewProps> = ({
       }
       ctx.stroke();
 
-      // Waypoint Nodes
-      for (let i = 0; i < coords.length; i++) {
-        const [wx, wy] = projectToScreen(coords[i][0], coords[i][1], width, height);
-        ctx.fillStyle = i <= curSeg ? '#64748b' : '#38bdf8';
-        ctx.beginPath();
-        ctx.arc(wx, wy, 3, 0, Math.PI * 2);
-        ctx.fill();
+      // Waypoint Nodes & Bridge Navigation Labels
+      if (routeResult.navigationalWaypoints && routeResult.navigationalWaypoints.length > 0) {
+        const totalWps = routeResult.navigationalWaypoints.length;
+        for (let i = 0; i < totalWps; i++) {
+          const wp = routeResult.navigationalWaypoints[i];
+          const [wx, wy] = projectToScreen(wp.coords[0], wp.coords[1], width, height);
+          const isDep = i === 0;
+          const isArr = i === totalWps - 1;
+          const isGateway = wp.name.includes('GATEWAY') || wp.name.includes('CONVERGENCE');
 
-        if (zoomLevel < 500 && i > 0 && i < coords.length - 1) {
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '8px monospace';
-          ctx.fillText(`WP${i}`, wx + 5, wy - 5);
+          ctx.fillStyle = isDep ? '#10b981' : isArr ? '#f59e0b' : isGateway ? '#c084fc' : '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(wx, wy, isDep || isArr ? 4.5 : isGateway ? 4 : 2.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (zoomLevel < 1200) {
+            ctx.fillStyle = isDep ? '#34d399' : isArr ? '#fbbf24' : isGateway ? '#d8b4fe' : '#94a3b8';
+            ctx.font = 'bold 8.5px monospace';
+            const label = isDep ? 'DEP' : isArr ? 'ARR' : wp.name;
+            const bearingInfo = wp.legDistanceNm > 0 && zoomLevel < 450
+              ? ` ${Math.round(wp.trueBearingDeg)}°T ${wp.legDistanceNm.toFixed(0)}NM`
+              : '';
+            ctx.fillText(`${label}${bearingInfo}`, wx + 5, wy - 4);
+          }
+        }
+      } else {
+        for (let i = 0; i < coords.length; i++) {
+          const [wx, wy] = projectToScreen(coords[i][0], coords[i][1], width, height);
+          ctx.fillStyle = i <= curSeg ? '#64748b' : '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(wx, wy, 3, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (zoomLevel < 500 && i > 0 && i < coords.length - 1) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '8px monospace';
+            ctx.fillText(`WP${i}`, wx + 5, wy - 5);
+          }
         }
       }
     }
@@ -576,6 +602,7 @@ const Tactical2DViewComponent: FC<Tactical2DViewProps> = ({
       for (const { berg } of nearbySentinel1) {
         const isSelected = selectedEntity?.type === 'SENTINEL_1' && selectedEntity.data.id === berg.id;
         const [sx, sy] = projectToScreen(berg.longitude, berg.latitude, width, height);
+        if (sx < -20 || sx > width + 20 || sy < -20 || sy > height + 20) continue;
 
         ctx.fillStyle = isHighlight
           ? (isSelected ? '#ffffff' : berg.fastIceStatus === 'Outside' ? '#ff1744' : '#f43f5e')
@@ -606,6 +633,7 @@ const Tactical2DViewComponent: FC<Tactical2DViewProps> = ({
       for (const { berg } of nearbyDrifting) {
         const isSelected = selectedEntity?.type === 'BYU_NIC' && selectedEntity.data.id === berg.id;
         const [dx, dy] = projectToScreen(berg.latestPos!.lon, berg.latestPos!.lat, width, height);
+        if (dx < -20 || dx > width + 20 || dy < -20 || dy > height + 20) continue;
 
         const dSz = isHighlight ? (isSelected ? 10 : 8) : isSubdued ? 3.5 : 5;
         ctx.fillStyle = isHighlight
@@ -642,6 +670,7 @@ const Tactical2DViewComponent: FC<Tactical2DViewProps> = ({
         if (port.wpiNumber === departurePort?.wpiNumber || port.wpiNumber === destinationPort?.wpiNumber) continue;
         const isSelected = selectedEntity?.type === 'PORT' && selectedEntity.data.wpiNumber === port.wpiNumber;
         const [px, py] = projectToScreen(port.longitude, port.latitude, width, height);
+        if (px < -30 || px > width + 30 || py < -30 || py > height + 30) continue;
 
         ctx.fillStyle = isHighlight
           ? '#38bdf8'

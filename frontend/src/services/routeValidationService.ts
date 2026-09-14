@@ -103,10 +103,17 @@ export function getAdaptiveDockToleranceKm(port?: PortRecord | null): number {
   if (!port || !port.harborType) return 1.5;
   const ht = port.harborType.toLowerCase();
   if (ht.includes('river') || ht.includes('canal')) {
-    return 4.5;
+    // Estuarine shipping basins (e.g. Rotterdam, London, Antwerp) with designated maritime approach channels
+    if (port.channelDepth || port.harborSize === 'Large') {
+      return 12.0;
+    }
+    return 5.0;
+  }
+  if (ht.includes('ria') || ht.includes('sound') || ht.includes('fjord')) {
+    return 4.0;
   }
   if (ht.includes('natural') || ht.includes('coastal') || ht.includes('breakwater') || ht.includes('tide')) {
-    return 2.0;
+    return 2.5;
   }
   return 1.5;
 }
@@ -141,10 +148,29 @@ export function checkLandIntersections(
     const dockToleranceKm = isDeparture ? depToleranceKm : destToleranceKm;
     const distKm = calculateGeodesicDistanceMeters(s1[0], s1[1], s2[0], s2[1]) / 1000.0;
 
-    // Subdivide long segments (> 25 km) into spherical steps to prevent geodesic chord distortion
+    // Fast Bounding Box Pre-Check:
+    // If a segment does not cross the antimeridian, test if its expanded AABB contains
+    // any candidate barrier edges or polygon bounding boxes. In open ocean, this eliminates
+    // 90%+ of segment subdivisions and spherical intersection computations.
+    const segMargin = Math.max(0.6, (dockToleranceKm * 1.5) / 111.0);
+    const segCrossesAntimeridian = Math.abs(s2[0] - s1[0]) > 180.0;
+    if (!segCrossesAntimeridian) {
+      const segMinLon = Math.min(s1[0], s2[0]) - segMargin;
+      const segMaxLon = Math.max(s1[0], s2[0]) + segMargin;
+      const segMinLat = Math.min(s1[1], s2[1]) - segMargin;
+      const segMaxLat = Math.max(s1[1], s2[1]) + segMargin;
+
+      if (!edgeGrid.hasCandidateEdges(segMinLon, segMinLat, segMaxLon, segMaxLat) &&
+          !polygonGrid.hasCandidateRings(segMinLon, segMinLat, segMaxLon, segMaxLat)) {
+        continue;
+      }
+    }
+
+    // Subdivide segments into high-resolution spherical steps (2.5 - 15 km)
+    // to strictly prevent geodesic chord distortion and detect narrow island archipelagos
     const midLat = (s1[1] + s2[1]) / 2.0;
     const toRadLat = (Math.abs(midLat) * Math.PI) / 180.0;
-    const subStepKm = Math.max(5.0, Math.min(25.0, 30.0 * Math.cos(toRadLat)));
+    const subStepKm = Math.max(2.5, Math.min(15.0, 20.0 * Math.cos(toRadLat)));
     const steps = Math.max(1, Math.ceil(distKm / subStepKm));
 
     let intersects = false;

@@ -96,6 +96,7 @@ export function isSegmentWaterSafeWithDock(
   }
 
   const edgeGrid = getSpatialEdgeGrid(rings);
+  const polygonGrid = getSpatialPolygonGrid(rings);
 
   for (const [p1, p2] of subSegments) {
     if (Math.abs(p1[0] - p2[0]) < 1e-6 && Math.abs(p1[1] - p2[1]) < 1e-6) {
@@ -107,6 +108,12 @@ export function isSegmentWaterSafeWithDock(
     const maxLon = Math.max(p1[0], p2[0]) + marginDeg;
     const minLat = Math.min(p1[1], p2[1]) - marginDeg;
     const maxLat = Math.max(p1[1], p2[1]) + marginDeg;
+
+    // Fast AABB pre-check: if subsegment bounding box contains no barrier edges or polygon bounding boxes
+    if (!edgeGrid.hasCandidateEdges(minLon, minLat, maxLon, maxLat) &&
+        !polygonGrid.hasCandidateRings(minLon, minLat, maxLon, maxLat)) {
+      continue;
+    }
 
     // 1. Exact 3D Spherical Edge Crossings & Clearance Buffer via Spatial Index
     const candidateEdges = edgeGrid.queryCandidateEdges(minLon, minLat, maxLon, maxLat);
@@ -163,7 +170,6 @@ export function isSegmentWaterSafeWithDock(
     // 2. Interior Polygon Containment Check (multi-sample testing)
     const segLenKm = calculateGeodesicDistanceMeters(p1[0], p1[1], p2[0], p2[1]) / 1000.0;
     const sampleTs = segLenKm > 15.0 ? [0.25, 0.5, 0.75] : [0.5];
-    const polygonGrid = getSpatialPolygonGrid(rings);
 
     for (const t of sampleTs) {
       const samplePt = t === 0.5 ? [(p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0] as [number, number] : slerpCoordinates(p1, p2, t);
@@ -444,6 +450,36 @@ function findFairwayConnector(
       if (!isSegmentWaterSafeWithDock(detourPt, p2, null, rings, 0.0, 0.0)) continue;
 
       return [detourPt];
+    }
+  }
+
+  // Compound 2-Hop Fairway Search for complex sounds, rias, and island-enclosed harbors
+  // If no single detour point connects p1 to p2, evaluate 2-point compound fairway pairs:
+  // p1 -> fairwayPtA (clearing inner sound/harbor) -> fairwayPtB (clearing outer cape/island) -> p2
+  if (distKm > 10.0) {
+    const fracA = 0.25;
+    const fracB = 0.70;
+    const anchorA = slerpCoordinates(p1, p2, fracA);
+    const anchorB = slerpCoordinates(p1, p2, fracB);
+    const compoundOffsets = [6.0, 15.0, 30.0, 50.0];
+
+    for (const offA of compoundOffsets) {
+      if (offA > distKm * 0.6) continue;
+      for (const bA of [perpLeft, perpRight]) {
+        const ptA = calculateDestinationPoint(anchorA, offA, bA);
+        if (!isSegmentWaterSafeWithDock(p1, ptA, null, rings, 0.0, 0.0)) continue;
+
+        for (const offB of compoundOffsets) {
+          if (offB > distKm * 0.6) continue;
+          for (const bB of [perpLeft, perpRight]) {
+            const ptB = calculateDestinationPoint(anchorB, offB, bB);
+            if (!isSegmentWaterSafeWithDock(ptA, ptB, null, rings, 0.0, 0.0)) continue;
+            if (!isSegmentWaterSafeWithDock(ptB, p2, null, rings, 0.0, 0.0)) continue;
+
+            return [ptA, ptB];
+          }
+        }
+      }
     }
   }
 

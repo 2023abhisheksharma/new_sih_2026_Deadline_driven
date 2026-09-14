@@ -30,10 +30,12 @@ import {
   type LandRing,
   type RouteValidationReport,
   type TerminalApproachMetadata,
+  type FailingSegmentDiagnostic,
 } from './routeValidationService';
 import {
   loadPolarWaterGraph,
-  dijkstraShortestPath,
+  aStarShortestPath,
+  aStarShortestPathWithDistance,
   findAdaptiveWaterNode,
   extractMarnetCoordinates,
   POLAR_DATASET_PROVENANCE,
@@ -48,9 +50,15 @@ import {
   evaluateRouteQuality,
   calculateRouteQualityScore,
   smoothMaritimeTrajectory,
+  extractNavigationalWaypoints,
+  computeVoyageProfile,
   type RouteQualityMetrics,
   type RouteQualityScore,
+  type NavigationalWaypoint,
+  type VoyageIceProfile,
 } from './routeQualityService';
+
+export type { NavigationalWaypoint, VoyageIceProfile };
 
 export type HybridTopology =
   | 'CASE_1_POLAR_POLAR'
@@ -116,6 +124,8 @@ export interface HybridMaritimeRouteResult {
   terminalApproachStatus?: 'DIRECT_SAFE' | 'RADIAL_SCAN_SUCCESS' | 'APPROACH_UNAVAILABLE';
   routeQualityMetrics?: RouteQualityMetrics;
   routeQualityScore?: RouteQualityScore;
+  navigationalWaypoints?: NavigationalWaypoint[];
+  voyageProfile?: VoyageIceProfile;
   provenance: {
     dataset: string;
     version: string;
@@ -242,7 +252,7 @@ export function classifyRoutingTopology(
 
   // Case 1 or Case 5: Both endpoints are in the polar domain and snap to primary polar component
   if (isOriginPolarDomain && isDestPolarDomain && originSnap && destSnap) {
-    const directPath = dijkstraShortestPath(
+    const directPath = aStarShortestPath(
       originSnap.nodeIndex,
       destSnap.nodeIndex,
       graph.nodes,
@@ -356,7 +366,7 @@ export function pruneGatewayCandidates(
   portCoordsA: [number, number],
   portCoordsB: [number, number],
   gateways: ValidatedGateway[],
-  maxCandidates: number = 18
+  maxCandidates: number = 8
 ): ValidatedGateway[] {
   const scored = gateways.map((gw) => {
     const d1 =
@@ -373,7 +383,9 @@ export function pruneGatewayCandidates(
         portCoordsB[0],
         portCoordsB[1]
       ) / 1000.0;
-    const estTotalKm = d1 + d2 + gw.transitionDistanceKm;
+    // Gateways with artificial high transition seams (> 5 km) receive an operational penalty
+    const transPenalty = gw.transitionDistanceKm > 5.0 ? gw.transitionDistanceKm * 2.0 : 0.0;
+    const estTotalKm = d1 + d2 + gw.transitionDistanceKm + transPenalty;
     return { gw, estTotalKm };
   });
 
@@ -388,11 +400,11 @@ export function pruneGatewayCandidates(
   const selected = new Map<string, ValidatedGateway>();
   const sectorCount = new Map<string, number>();
 
-  // Ensure broad sector representation: up to 3 per sector
+  // Ensure broad sector representation: up to 2 per sector
   for (const s of scored) {
     const sec = s.gw.sector || 'Other';
     const count = sectorCount.get(sec) || 0;
-    if (count < 3) {
+    if (count < 2) {
       selected.set(s.gw.gatewayId, s.gw);
       sectorCount.set(sec, count + 1);
     }
@@ -517,7 +529,7 @@ export async function computeHybridMaritimeRoute(
   // CASE 1: Polar -> Polar Direct Dijkstra
   // --------------------------------------------------------------------------
   if (topology === 'CASE_1_POLAR_POLAR' && originSnap && destSnap) {
-    const path = dijkstraShortestPath(
+    const path = aStarShortestPath(
       originSnap.nodeIndex,
       destSnap.nodeIndex,
       graph.nodes,
@@ -588,6 +600,9 @@ export async function computeHybridMaritimeRoute(
       }
 
       if (validationReport.overallResult === 'PASS') {
+        const navigationalWaypoints = extractNavigationalWaypoints(finalCoordinates);
+        const voyageProfile = computeVoyageProfile(finalCoordinates, rings);
+
         return {
           status: 'SUCCESS',
           routeName: 'Computed Maritime Route',
@@ -604,9 +619,11 @@ export async function computeHybridMaritimeRoute(
           rawNodeCount: path.length,
           finalNodeCount: finalCoordinates.length,
           validationReport,
+          navigationalWaypoints,
+          voyageProfile,
           provenance: {
             ...HYBRID_ROUTING_PROVENANCE,
-            method: 'Direct Polar Navigable Water Graph (Dijkstra + Geodesic Smoothing)',
+            method: 'Direct Polar Navigable Water Graph (A* + Geodesic Smoothing)',
           },
         };
       } else {
@@ -672,195 +689,220 @@ export async function computeHybridMaritimeRoute(
   }
 
   // --------------------------------------------------------------------------
-  // CASE 2: Global -> Global Direct MARNET
+  // CASE 2: Global -> Global Direct MARNET (with Open Ocean Cape Fallbacks)
   // --------------------------------------------------------------------------
   if (topology === 'CASE_2_GLOBAL_GLOBAL') {
-    try {
-      const rawRoute = seaRoute(originCoords, destCoords, {
-        network: marnet20,
-        units: 'kilometers',
-        antimeridian: 'split',
-      });
-      if (rawRoute && rawRoute.geometry) {
+    const canalOptionsList: (('suez' | 'panama')[] | undefined)[] = [undefined, ['suez'], ['panama']];
+    let lastValidationReport: RouteValidationReport | undefined;
+    let lastConstructedDistKm = 0;
+    let lastFirstFailSeg: FailingSegmentDiagnostic | undefined;
+    let lastDepApproachStatus: any = 'APPROACH_UNAVAILABLE';
+    let lastQualityMetrics: any;
+    let lastQualityScore: any;
+
+    for (const restrictions of canalOptionsList) {
+      try {
+        const rawRoute = seaRoute(originCoords, destCoords, {
+          network: marnet20,
+          units: 'kilometers',
+          antimeridian: 'split',
+          ...(restrictions ? { restrictions } : {}),
+        });
+        if (!rawRoute || !rawRoute.geometry) continue;
+
         let netCoords = extractMarnetCoordinates(rawRoute.geometry);
-        if (netCoords && netCoords.length >= 2) {
-          // Terminal approach connectors for origin and destination
-          const rings = await loadLandRings();
-          let depApproach = findSafeTerminalApproach(
-            originCoords,
-            netCoords[0],
-            true,
-            rings,
-            getAdaptiveDockToleranceKm(origin)
-          );
-          const firstMarnetCutsLand =
-            netCoords.length > 2 &&
-            !isSegmentWaterSafeWithDock(netCoords[0], netCoords[1], null, rings, 0.0);
+        if (!netCoords || netCoords.length < 2) continue;
 
-          if (
-            (depApproach && depApproach.status === 'APPROACH_UNAVAILABLE') ||
-            firstMarnetCutsLand
-          ) {
-            if (netCoords.length > 2) {
-              const altDep = findSafeTerminalApproach(
-                originCoords,
-                netCoords[1],
-                true,
-                rings,
-                getAdaptiveDockToleranceKm(origin)
-              );
-              if (altDep && altDep.status !== 'APPROACH_UNAVAILABLE') {
-                depApproach = altDep;
-                netCoords = netCoords.slice(1);
-              }
-            }
-          }
+        // Terminal approach connectors for origin and destination
+        const rings = await loadLandRings();
+        let depApproach = findSafeTerminalApproach(
+          originCoords,
+          netCoords[0],
+          true,
+          rings,
+          getAdaptiveDockToleranceKm(origin)
+        );
+        const firstMarnetCutsLand =
+          netCoords.length > 2 &&
+          !isSegmentWaterSafeWithDock(netCoords[0], netCoords[1], null, rings, 0.0);
 
-          let arrApproach = findSafeTerminalApproach(
-            destCoords,
-            netCoords[netCoords.length - 1],
-            false,
-            rings,
-            getAdaptiveDockToleranceKm(destination)
-          );
-          const lastMarnetCutsLand =
-            netCoords.length > 2 &&
-            !isSegmentWaterSafeWithDock(
-              netCoords[netCoords.length - 2],
-              netCoords[netCoords.length - 1],
-              null,
+        if (
+          (depApproach && depApproach.status === 'APPROACH_UNAVAILABLE') ||
+          firstMarnetCutsLand
+        ) {
+          if (netCoords.length > 2) {
+            const altDep = findSafeTerminalApproach(
+              originCoords,
+              netCoords[1],
+              true,
               rings,
-              0.0
+              getAdaptiveDockToleranceKm(origin)
             );
-
-          if (
-            (arrApproach && arrApproach.status === 'APPROACH_UNAVAILABLE') ||
-            lastMarnetCutsLand
-          ) {
-            if (netCoords.length > 2) {
-              const altArr = findSafeTerminalApproach(
-                destCoords,
-                netCoords[netCoords.length - 2],
-                false,
-                rings,
-                getAdaptiveDockToleranceKm(destination)
-              );
-              if (altArr && altArr.status !== 'APPROACH_UNAVAILABLE') {
-                arrApproach = altArr;
-                netCoords = netCoords.slice(0, -1);
-              }
+            if (altDep && altDep.status !== 'APPROACH_UNAVAILABLE') {
+              depApproach = altDep;
+              netCoords = netCoords.slice(1);
             }
           }
+        }
 
-          const depSegment = depApproach ? depApproach.waypoints.slice(0, -1) : [originCoords];
-          const arrSegment = arrApproach ? arrApproach.waypoints.slice(1) : [destCoords];
-          const rawFullCoords: [number, number][] = [...depSegment, ...netCoords, ...arrSegment];
-          const fullCoords = smoothMaritimeTrajectory(rawFullCoords, rings);
-
-          let totalDistKm = 0;
-          for (let i = 0; i < fullCoords.length - 1; i++) {
-            totalDistKm +=
-              calculateGeodesicDistanceMeters(
-                fullCoords[i][0],
-                fullCoords[i][1],
-                fullCoords[i + 1][0],
-                fullCoords[i + 1][1]
-              ) / 1000.0;
-          }
-
-          const depTerminalSegmentCount = depApproach ? Math.max(1, depApproach.waypoints.length - 1) : 1;
-          const destTerminalSegmentCount = arrApproach ? Math.max(1, arrApproach.waypoints.length - 1) : 1;
-          const terminalMetadata: TerminalApproachMetadata = {
-            departureTerminalSegmentCount: depTerminalSegmentCount,
-            destinationTerminalSegmentCount: destTerminalSegmentCount,
-          };
-
-          const validationReport = await validateMaritimeRouteAsync(
-            fullCoords,
-            totalDistKm,
-            'Eurostat MARNET 20km',
-            origin,
-            destination,
-            terminalMetadata
+        let arrApproach = findSafeTerminalApproach(
+          destCoords,
+          netCoords[netCoords.length - 1],
+          false,
+          rings,
+          getAdaptiveDockToleranceKm(destination)
+        );
+        const lastMarnetCutsLand =
+          netCoords.length > 2 &&
+          !isSegmentWaterSafeWithDock(
+            netCoords[netCoords.length - 2],
+            netCoords[netCoords.length - 1],
+            null,
+            rings,
+            0.0
           );
 
-          const termCostKm =
-            (depApproach ? depApproach.approachLengthKm : 0) +
-            (arrApproach ? arrApproach.approachLengthKm : 0);
-          const qualityMetrics = evaluateRouteQuality(fullCoords, 0, termCostKm);
-          const qualityScore = calculateRouteQualityScore(qualityMetrics, totalDistKm);
-
-          if (validationReport.overallResult === 'PASS') {
-            return {
-              status: 'SUCCESS',
-              routeName: 'Computed Maritime Route',
-              topology,
-              coordinates: fullCoords,
-              distanceKm: totalDistKm,
-              constructedDistanceKm: totalDistKm,
-              durationHours: totalDistKm / 27.78,
-              polarDistanceKm: 0,
-              globalDistanceKm: totalDistKm,
-              transitionDistanceKm: 0,
-              gatewayIds: [],
-              candidateCountAttempted: 1,
-              rawNodeCount: netCoords.length,
-              finalNodeCount: fullCoords.length,
-              validationReport,
-              terminalApproachStatus:
-                depApproach.status === 'RADIAL_SCAN_SUCCESS' || arrApproach.status === 'RADIAL_SCAN_SUCCESS'
-                  ? 'RADIAL_SCAN_SUCCESS'
-                  : 'DIRECT_SAFE',
-              routeQualityMetrics: qualityMetrics,
-              routeQualityScore: qualityScore,
-              provenance: {
-                ...HYBRID_ROUTING_PROVENANCE,
-                method: 'Direct Eurostat MARNET 20km with Terminal Harbor Approaches',
-              },
-            };
+        if (
+          (arrApproach && arrApproach.status === 'APPROACH_UNAVAILABLE') ||
+          lastMarnetCutsLand
+        ) {
+          if (netCoords.length > 2) {
+            const altArr = findSafeTerminalApproach(
+              destCoords,
+              netCoords[netCoords.length - 2],
+              false,
+              rings,
+              getAdaptiveDockToleranceKm(destination)
+            );
+            if (altArr && altArr.status !== 'APPROACH_UNAVAILABLE') {
+              arrApproach = altArr;
+              netCoords = netCoords.slice(0, -1);
+            }
           }
+        }
 
-          // Strict validation rejected: distinguish terminal approach vs internal MARNET topology
-          const firstFailSeg = validationReport.failingSegments[0];
-          const isTerminalFail =
-            firstFailSeg &&
-            (firstFailSeg.segmentIndex === 0 ||
-              firstFailSeg.segmentIndex === fullCoords.length - 2);
-          const failCategory = isTerminalFail
-            ? 'Terminal harbor approach failure'
-            : 'Internal MARNET topology failure';
+        const depSegment = depApproach ? depApproach.waypoints.slice(0, -1) : [originCoords];
+        const arrSegment = arrApproach ? arrApproach.waypoints.slice(1) : [destCoords];
+        const rawFullCoords: [number, number][] = [...depSegment, ...netCoords, ...arrSegment];
+        const fullCoords = smoothMaritimeTrajectory(rawFullCoords, rings);
+
+        let totalDistKm = 0;
+        for (let i = 0; i < fullCoords.length - 1; i++) {
+          totalDistKm +=
+            calculateGeodesicDistanceMeters(
+              fullCoords[i][0],
+              fullCoords[i][1],
+              fullCoords[i + 1][0],
+              fullCoords[i + 1][1]
+            ) / 1000.0;
+        }
+
+        const depTerminalSegmentCount = depApproach ? Math.max(1, depApproach.waypoints.length - 1) : 1;
+        const destTerminalSegmentCount = arrApproach ? Math.max(1, arrApproach.waypoints.length - 1) : 1;
+        const terminalMetadata: TerminalApproachMetadata = {
+          departureTerminalSegmentCount: depTerminalSegmentCount,
+          destinationTerminalSegmentCount: destTerminalSegmentCount,
+        };
+
+        const validationReport = await validateMaritimeRouteAsync(
+          fullCoords,
+          totalDistKm,
+          restrictions ? `Eurostat MARNET 20km (via ${restrictions.join(', ')})` : 'Eurostat MARNET 20km',
+          origin,
+          destination,
+          terminalMetadata
+        );
+
+        const termCostKm =
+          (depApproach ? depApproach.approachLengthKm : 0) +
+          (arrApproach ? arrApproach.approachLengthKm : 0);
+        const qualityMetrics = evaluateRouteQuality(fullCoords, 0, termCostKm);
+        const qualityScore = calculateRouteQualityScore(qualityMetrics, totalDistKm);
+
+        lastValidationReport = validationReport;
+        lastConstructedDistKm = totalDistKm;
+        lastFirstFailSeg = validationReport.failingSegments[0];
+        lastDepApproachStatus = depApproach.status;
+        lastQualityMetrics = qualityMetrics;
+        lastQualityScore = qualityScore;
+
+        if (validationReport.overallResult === 'PASS') {
+          const navigationalWaypoints = extractNavigationalWaypoints(fullCoords);
+          const voyageProfile = computeVoyageProfile(fullCoords, rings);
 
           return {
-            status: 'REJECTED_LAND_INTERSECTION',
+            status: 'SUCCESS',
             routeName: 'Computed Maritime Route',
             topology,
-            coordinates: [],
-            distanceKm: 0,
+            coordinates: fullCoords,
+            distanceKm: totalDistKm,
             constructedDistanceKm: totalDistKm,
+            durationHours: totalDistKm / 27.78,
             polarDistanceKm: 0,
             globalDistanceKm: totalDistKm,
             transitionDistanceKm: 0,
             gatewayIds: [],
             candidateCountAttempted: 1,
-            rawNodeCount: 0,
-            finalNodeCount: 0,
+            rawNodeCount: netCoords.length,
+            finalNodeCount: fullCoords.length,
             validationReport,
             terminalApproachStatus:
-              depApproach.status === 'APPROACH_UNAVAILABLE' || arrApproach.status === 'APPROACH_UNAVAILABLE'
-                ? 'APPROACH_UNAVAILABLE'
-                : 'RADIAL_SCAN_SUCCESS',
+              depApproach.status === 'RADIAL_SCAN_SUCCESS' || arrApproach.status === 'RADIAL_SCAN_SUCCESS'
+                ? 'RADIAL_SCAN_SUCCESS'
+                : 'DIRECT_SAFE',
             routeQualityMetrics: qualityMetrics,
             routeQualityScore: qualityScore,
-            failingReason: `${failCategory} (${firstFailSeg?.diagnosticReason || 'land intersection'})`,
+            navigationalWaypoints,
+            voyageProfile,
             provenance: {
               ...HYBRID_ROUTING_PROVENANCE,
-              method: 'Direct Eurostat MARNET 20km',
+              method: restrictions
+                ? `Direct Eurostat MARNET 20km (Open Ocean via Cape Fallback: ${restrictions.join(', ')})`
+                : 'Direct Eurostat MARNET 20km with Terminal Harbor Approaches',
             },
           };
         }
+      } catch (err) {
+        console.warn('MARNET query attempt error:', err);
       }
-    } catch (err) {
-      console.debug('Global -> Global MARNET calculation error:', err);
+    }
+
+    if (lastValidationReport) {
+      const isTerminalFail =
+        lastFirstFailSeg &&
+        (lastFirstFailSeg.segmentIndex === 0 ||
+          lastFirstFailSeg.segmentIndex >= (lastValidationReport.failingSegments.length - 2));
+      const failCategory = isTerminalFail
+        ? 'Terminal harbor approach failure'
+        : 'Internal MARNET topology failure';
+
+      return {
+        status: 'REJECTED_LAND_INTERSECTION',
+        routeName: 'Computed Maritime Route',
+        topology,
+        coordinates: [],
+        distanceKm: 0,
+        constructedDistanceKm: lastConstructedDistKm,
+        polarDistanceKm: 0,
+        globalDistanceKm: lastConstructedDistKm,
+        transitionDistanceKm: 0,
+        gatewayIds: [],
+        candidateCountAttempted: 1,
+        rawNodeCount: 0,
+        finalNodeCount: 0,
+        validationReport: lastValidationReport,
+        terminalApproachStatus:
+          lastDepApproachStatus === 'APPROACH_UNAVAILABLE'
+            ? 'APPROACH_UNAVAILABLE'
+            : 'RADIAL_SCAN_SUCCESS',
+        routeQualityMetrics: lastQualityMetrics,
+        routeQualityScore: lastQualityScore,
+        failingReason: `${failCategory} (${lastFirstFailSeg?.diagnosticReason || 'land intersection'})`,
+        provenance: {
+          ...HYBRID_ROUTING_PROVENANCE,
+          method: 'Direct Eurostat MARNET 20km',
+        },
+      };
     }
 
     return {
@@ -927,26 +969,34 @@ export async function computeHybridMaritimeRoute(
 
   // CASE 4: Polar Origin -> Global Destination
   if (topology === 'CASE_4_POLAR_GLOBAL' && originSnap) {
-    const candidateGateways = pruneGatewayCandidates(originCoords, destCoords, allGateways, 10);
+    const candidateGateways = pruneGatewayCandidates(originCoords, destCoords, allGateways, 6);
+    const arrApproachCache = new Map<string, any>();
 
     for (const gw of candidateGateways) {
-      if (validCandidates.length >= 2) {
-        const bestDist = Math.min(...validCandidates.map((c) => c.totalDistanceKm));
-        const estGateDist =
-          calculateGeodesicDistanceMeters(originCoords[0], originCoords[1], gw.polarCoords[0], gw.polarCoords[1]) / 1000.0 +
-          calculateGeodesicDistanceMeters(gw.globalCoords[0], gw.globalCoords[1], destCoords[0], destCoords[1]) / 1000.0;
-        if (estGateDist > bestDist * 1.15) {
-          break;
-        }
-      }
-
-      const polarPath = dijkstraShortestPath(
+      // 1. Fast A* polar subpath check (< 2 ms)
+      const polarResult = aStarShortestPathWithDistance(
         originSnap.nodeIndex,
         gw.polarNodeId,
         graph.nodes,
         graph.adj
       );
-      if (!polarPath || polarPath.length === 0) continue;
+      if (!polarResult || !polarResult.path || polarResult.path.length === 0) continue;
+
+      // 2. Admissible Great-Circle Lower Bound Pruning (before MARNET)
+      if (validCandidates.length >= 1) {
+        const bestDist = Math.min(...validCandidates.map((c) => c.totalDistanceKm));
+        const dGCGlobal =
+          calculateGeodesicDistanceMeters(
+            gw.globalCoords[0],
+            gw.globalCoords[1],
+            destCoords[0],
+            destCoords[1]
+          ) / 1000.0;
+        const gcLowerBound = polarResult.distanceKm + gw.transitionDistanceKm + dGCGlobal;
+        if (gcLowerBound > bestDist) {
+          continue;
+        }
+      }
 
       let rawGlobal: any = null;
       try {
@@ -963,50 +1013,55 @@ export async function computeHybridMaritimeRoute(
       const globalCoords = extractMarnetCoordinates(rawGlobal.geometry);
       if (!globalCoords || globalCoords.length < 2) continue;
 
-      // Terminal approach connector for global destination
+      // Terminal approach connector for global destination (memoized)
       let netCoords = [...globalCoords];
       const rings = await loadLandRings();
-      let arrApproach = findSafeTerminalApproach(
-        destCoords,
-        netCoords[netCoords.length - 1],
-        false,
-        rings,
-        getAdaptiveDockToleranceKm(destination)
-      );
-
-      const lastMarnetCutsLand =
-        netCoords.length > 2 &&
-        !isSegmentWaterSafeWithDock(
-          netCoords[netCoords.length - 2],
+      const arrKey = `${destCoords[0]},${destCoords[1]}|${netCoords[netCoords.length - 1][0]},${netCoords[netCoords.length - 1][1]}`;
+      let arrApproach = arrApproachCache.get(arrKey);
+      if (!arrApproach) {
+        arrApproach = findSafeTerminalApproach(
+          destCoords,
           netCoords[netCoords.length - 1],
-          null,
+          false,
           rings,
-          0.0
+          getAdaptiveDockToleranceKm(destination)
         );
 
-      if (
-        (arrApproach && arrApproach.status === 'APPROACH_UNAVAILABLE') ||
-        lastMarnetCutsLand
-      ) {
-        if (netCoords.length > 2) {
-          const altArr = findSafeTerminalApproach(
-            destCoords,
+        const lastMarnetCutsLand =
+          netCoords.length > 2 &&
+          !isSegmentWaterSafeWithDock(
             netCoords[netCoords.length - 2],
-            false,
+            netCoords[netCoords.length - 1],
+            null,
             rings,
-            getAdaptiveDockToleranceKm(destination)
+            0.0
           );
-          if (altArr && altArr.status !== 'APPROACH_UNAVAILABLE') {
-            arrApproach = altArr;
-            netCoords = netCoords.slice(0, -1);
+
+        if (
+          (arrApproach && arrApproach.status === 'APPROACH_UNAVAILABLE') ||
+          lastMarnetCutsLand
+        ) {
+          if (netCoords.length > 2) {
+            const altArr = findSafeTerminalApproach(
+              destCoords,
+              netCoords[netCoords.length - 2],
+              false,
+              rings,
+              getAdaptiveDockToleranceKm(destination)
+            );
+            if (altArr && altArr.status !== 'APPROACH_UNAVAILABLE') {
+              arrApproach = altArr;
+              netCoords = netCoords.slice(0, -1);
+            }
           }
         }
+        if (arrApproach) arrApproachCache.set(arrKey, arrApproach);
       }
 
       const originBerth: [number, number][] = originSnap.waterBerthCoords
         ? [originCoords, originSnap.waterBerthCoords]
         : [originCoords];
-      const polarSegment: [number, number][] = [...originBerth, ...polarPath];
+      const polarSegment: [number, number][] = [...originBerth, ...polarResult.path];
       const transitionSegment: [number, number][] =
         gw.transitionDistanceKm > 0.05 ? [gw.polarCoords, gw.globalCoords] : [gw.polarCoords];
       const globalSegment: [number, number][] = arrApproach
@@ -1018,17 +1073,8 @@ export async function computeHybridMaritimeRoute(
 
       const smoothed = smoothMaritimeTrajectory(stitched, rings);
 
-      // Distance calculations
-      let polarDistKm = 0;
-      for (let i = 0; i < polarSegment.length - 1; i++) {
-        polarDistKm +=
-          calculateGeodesicDistanceMeters(
-            polarSegment[i][0],
-            polarSegment[i][1],
-            polarSegment[i + 1][0],
-            polarSegment[i + 1][1]
-          ) / 1000.0;
-      }
+      // Distance calculations (exact polar distance from A*)
+      let polarDistKm = polarResult.distanceKm;
 
       let globalDistKm =
         typeof rawGlobal.properties?.length === 'number' && rawGlobal.properties.length > 0
@@ -1139,16 +1185,32 @@ export async function computeHybridMaritimeRoute(
 
   // CASE 3: Global Origin -> Polar Destination
   if (topology === 'CASE_3_GLOBAL_POLAR' && destSnap) {
-    const candidateGateways = pruneGatewayCandidates(destCoords, originCoords, allGateways, 10);
+    const candidateGateways = pruneGatewayCandidates(destCoords, originCoords, allGateways, 6);
+    const depApproachCache = new Map<string, any>();
 
     for (const gw of candidateGateways) {
-      if (validCandidates.length >= 2) {
+      // 1. Fast A* polar subpath check (< 2 ms)
+      const polarResult = aStarShortestPathWithDistance(
+        gw.polarNodeId,
+        destSnap.nodeIndex,
+        graph.nodes,
+        graph.adj
+      );
+      if (!polarResult || !polarResult.path || polarResult.path.length === 0) continue;
+
+      // 2. Admissible Great-Circle Lower Bound Pruning (before MARNET)
+      if (validCandidates.length >= 1) {
         const bestDist = Math.min(...validCandidates.map((c) => c.totalDistanceKm));
-        const estGateDist =
-          calculateGeodesicDistanceMeters(destCoords[0], destCoords[1], gw.polarCoords[0], gw.polarCoords[1]) / 1000.0 +
-          calculateGeodesicDistanceMeters(gw.globalCoords[0], gw.globalCoords[1], originCoords[0], originCoords[1]) / 1000.0;
-        if (estGateDist > bestDist * 1.15) {
-          break;
+        const dGCGlobal =
+          calculateGeodesicDistanceMeters(
+            originCoords[0],
+            originCoords[1],
+            gw.globalCoords[0],
+            gw.globalCoords[1]
+          ) / 1000.0;
+        const gcLowerBound = dGCGlobal + gw.transitionDistanceKm + polarResult.distanceKm;
+        if (gcLowerBound > bestDist) {
+          continue;
         }
       }
 
@@ -1167,46 +1229,43 @@ export async function computeHybridMaritimeRoute(
       const globalCoords = extractMarnetCoordinates(rawGlobal.geometry);
       if (!globalCoords || globalCoords.length < 2) continue;
 
-      const polarPath = dijkstraShortestPath(
-        gw.polarNodeId,
-        destSnap.nodeIndex,
-        graph.nodes,
-        graph.adj
-      );
-      if (!polarPath || polarPath.length === 0) continue;
-
-      // Terminal approach connector for global origin
+      // Terminal approach connector for global origin (memoized)
       let netCoords = [...globalCoords];
       const rings = await loadLandRings();
-      let depApproach = findSafeTerminalApproach(
-        originCoords,
-        netCoords[0],
-        true,
-        rings,
-        getAdaptiveDockToleranceKm(origin)
-      );
+      const depKey = `${originCoords[0]},${originCoords[1]}|${netCoords[0][0]},${netCoords[0][1]}`;
+      let depApproach = depApproachCache.get(depKey);
+      if (!depApproach) {
+        depApproach = findSafeTerminalApproach(
+          originCoords,
+          netCoords[0],
+          true,
+          rings,
+          getAdaptiveDockToleranceKm(origin)
+        );
 
-      const firstMarnetCutsLand =
-        netCoords.length > 2 &&
-        !isSegmentWaterSafeWithDock(netCoords[0], netCoords[1], null, rings, 0.0);
+        const firstMarnetCutsLand =
+          netCoords.length > 2 &&
+          !isSegmentWaterSafeWithDock(netCoords[0], netCoords[1], null, rings, 0.0);
 
-      if (
-        (depApproach && depApproach.status === 'APPROACH_UNAVAILABLE') ||
-        firstMarnetCutsLand
-      ) {
-        if (netCoords.length > 2) {
-          const altDep = findSafeTerminalApproach(
-            originCoords,
-            netCoords[1],
-            true,
-            rings,
-            getAdaptiveDockToleranceKm(origin)
-          );
-          if (altDep && altDep.status !== 'APPROACH_UNAVAILABLE') {
-            depApproach = altDep;
-            netCoords = netCoords.slice(1);
+        if (
+          (depApproach && depApproach.status === 'APPROACH_UNAVAILABLE') ||
+          firstMarnetCutsLand
+        ) {
+          if (netCoords.length > 2) {
+            const altDep = findSafeTerminalApproach(
+              originCoords,
+              netCoords[1],
+              true,
+              rings,
+              getAdaptiveDockToleranceKm(origin)
+            );
+            if (altDep && altDep.status !== 'APPROACH_UNAVAILABLE') {
+              depApproach = altDep;
+              netCoords = netCoords.slice(1);
+            }
           }
         }
+        if (depApproach) depApproachCache.set(depKey, depApproach);
       }
 
       const globalSegment: [number, number][] = depApproach
@@ -1217,23 +1276,15 @@ export async function computeHybridMaritimeRoute(
       const destBerth: [number, number][] = destSnap.waterBerthCoords
         ? [destSnap.waterBerthCoords, destCoords]
         : [destCoords];
-      const polarSegment: [number, number][] = [...polarPath, ...destBerth];
+      const polarSegment: [number, number][] = [...polarResult.path, ...destBerth];
 
       const stitched = stitchPolylines([globalSegment, transitionSegment, polarSegment]);
       if (!stitched) continue;
 
       const smoothed = smoothMaritimeTrajectory(stitched, rings);
 
-      let polarDistKm = 0;
-      for (let i = 0; i < polarSegment.length - 1; i++) {
-        polarDistKm +=
-          calculateGeodesicDistanceMeters(
-            polarSegment[i][0],
-            polarSegment[i][1],
-            polarSegment[i + 1][0],
-            polarSegment[i + 1][1]
-          ) / 1000.0;
-      }
+      // Distance calculations (exact polar distance from A*)
+      let polarDistKm = polarResult.distanceKm;
 
       let globalDistKm =
         typeof rawGlobal.properties?.length === 'number' && rawGlobal.properties.length > 0
@@ -1374,6 +1425,10 @@ export async function computeHybridMaritimeRoute(
     });
 
     const winner = scoredCandidates[0];
+    const rings = await loadLandRings();
+    const navigationalWaypoints = extractNavigationalWaypoints(winner.coordinates);
+    const voyageProfile = computeVoyageProfile(winner.coordinates, rings);
+
     return {
       status: 'SUCCESS',
       routeName: 'Computed Maritime Route',
@@ -1396,6 +1451,8 @@ export async function computeHybridMaritimeRoute(
       terminalApproachStatus: winner.terminalApproachStatus,
       routeQualityMetrics: winner.qualityMetrics,
       routeQualityScore: winner.qualityScore,
+      navigationalWaypoints,
+      voyageProfile,
       provenance: {
         ...HYBRID_ROUTING_PROVENANCE,
         method: `Hybrid Gateway Transition via ${winner.gateway.gatewayId} (Quality Score: ${winner.qualityScore.compositeScore.toFixed(4)})`,

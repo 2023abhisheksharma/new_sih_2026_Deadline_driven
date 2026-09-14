@@ -836,12 +836,26 @@ export const CesiumGlobe = memo(
       viewer.scene.requestRender();
     }, [destinationPort]);
 
-    // Sync Computed Maritime Route Polyline (Pure Renderer Driven by maritimeRoute Prop)
+    const routeWaypointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null);
+    const routeLabelsRef = useRef<Cesium.LabelCollection | null>(null);
+
+    // Sync Computed Maritime Route Polyline & Waypoint Visuals (Pure Renderer Driven by maritimeRoute Prop)
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || viewer.isDestroyed()) return;
 
       const routeEntity = viewer.entities.getById('mission-maritime-route');
+      const swathEntity = viewer.entities.getById('mission-maritime-swath');
+
+      // Clean up previous waypoint primitives
+      if (routeWaypointsRef.current && !routeWaypointsRef.current.isDestroyed()) {
+        viewer.scene.primitives.remove(routeWaypointsRef.current);
+        routeWaypointsRef.current = null;
+      }
+      if (routeLabelsRef.current && !routeLabelsRef.current.isDestroyed()) {
+        viewer.scene.primitives.remove(routeLabelsRef.current);
+        routeLabelsRef.current = null;
+      }
 
       // STRICT VALIDATION GATE: Only render if maritimeRoute is valid, status === 'SUCCESS', coordinates pass all tests
       if (
@@ -854,7 +868,35 @@ export const CesiumGlobe = memo(
         const positions = maritimeRoute.coordinates.map(([lon, lat]) =>
           Cesium.Cartesian3.fromDegrees(lon, lat, 1200)
         );
+        const swathPositions = maritimeRoute.coordinates.map(([lon, lat]) =>
+          Cesium.Cartesian3.fromDegrees(lon, lat, 900)
+        );
 
+        // 1. Safety Corridor Swath Polyline (Translucent Fairway Glow)
+        if (!swathEntity) {
+          viewer.entities.add({
+            id: 'mission-maritime-swath',
+            name: 'Maritime Safety Corridor Swath',
+            polyline: {
+              positions: swathPositions,
+              width: 14.0,
+              material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 0.5,
+                taperPower: 1.0,
+                color: Cesium.Color.fromCssColorString('#0284c7').withAlpha(0.25),
+              }),
+              arcType: Cesium.ArcType.NONE,
+            },
+          });
+        } else {
+          if (swathEntity.polyline) {
+            swathEntity.polyline.positions = new Cesium.ConstantProperty(swathPositions);
+            swathEntity.polyline.arcType = new Cesium.ConstantProperty(Cesium.ArcType.NONE);
+          }
+          swathEntity.show = true;
+        }
+
+        // 2. Core High-Contrast Maritime Track Polyline
         if (!routeEntity) {
           viewer.entities.add({
             id: 'mission-maritime-route',
@@ -863,7 +905,7 @@ export const CesiumGlobe = memo(
               positions,
               width: 3.5,
               material: new Cesium.PolylineGlowMaterialProperty({
-                glowPower: 0.25,
+                glowPower: 0.35,
                 taperPower: 1.0,
                 color: Cesium.Color.fromCssColorString('#38bdf8'),
               }),
@@ -877,14 +919,100 @@ export const CesiumGlobe = memo(
           }
           routeEntity.show = true;
         }
+
+        // 3. High-Performance Waypoint & Turn Markers Primitive Collection
+        if (maritimeRoute.navigationalWaypoints && maritimeRoute.navigationalWaypoints.length > 0) {
+          const wpPoints = new Cesium.PointPrimitiveCollection();
+          const wpLabels = new Cesium.LabelCollection();
+          const totalWps = maritimeRoute.navigationalWaypoints.length;
+
+          maritimeRoute.navigationalWaypoints.forEach((wp, idx) => {
+            const isDeparture = idx === 0;
+            const isDestination = idx === totalWps - 1;
+            const isGateway = wp.name.includes('GATEWAY') || wp.name.includes('CONVERGENCE');
+            const isSignificantTurn = Math.abs(wp.turnAngleDeg) >= 15;
+
+            let color = Cesium.Color.fromCssColorString('#38bdf8');
+            let pixelSize = 5.5;
+            let outlineColor = Cesium.Color.fromCssColorString('#0369a1');
+
+            if (isDeparture) {
+              color = Cesium.Color.fromCssColorString('#10b981');
+              pixelSize = 9.0;
+              outlineColor = Cesium.Color.fromCssColorString('#064e3b');
+            } else if (isDestination) {
+              color = Cesium.Color.fromCssColorString('#f59e0b');
+              pixelSize = 9.0;
+              outlineColor = Cesium.Color.fromCssColorString('#78350f');
+            } else if (isGateway) {
+              color = Cesium.Color.fromCssColorString('#c084fc');
+              pixelSize = 7.5;
+              outlineColor = Cesium.Color.fromCssColorString('#581c87');
+            } else if (wp.zone === 'POLAR') {
+              color = Cesium.Color.fromCssColorString('#93c5fd');
+              pixelSize = 6.0;
+            }
+
+            const pos = Cesium.Cartesian3.fromDegrees(wp.coords[0], wp.coords[1], 1300);
+            wpPoints.add({
+              position: pos,
+              color,
+              pixelSize,
+              outlineColor,
+              outlineWidth: 2,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            });
+
+            // Add text label for key turning points, gateways, and terminals
+            if (isDeparture || isDestination || isGateway || isSignificantTurn || idx % 4 === 0) {
+              const labelText = isDeparture ? 'DEP' : isDestination ? 'ARR' : wp.name;
+              wpLabels.add({
+                position: pos,
+                text: labelText,
+                font: 'bold 10px Inter, sans-serif',
+                fillColor: color,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 3,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                pixelOffset: new Cesium.Cartesian2(0, -12),
+                horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 10_000_000),
+                scaleByDistance: new Cesium.NearFarScalar(1.0e3, 1.0, 5.0e6, 0.7),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              });
+            }
+          });
+
+          viewer.scene.primitives.add(wpPoints);
+          viewer.scene.primitives.add(wpLabels);
+          routeWaypointsRef.current = wpPoints;
+          routeLabelsRef.current = wpLabels;
+        }
       } else {
         // REJECTED / INVALID / NULL / PENDING: Immediately hide route from the globe
         if (routeEntity) {
           routeEntity.show = false;
         }
+        if (swathEntity) {
+          swathEntity.show = false;
+        }
       }
 
       viewer.scene.requestRender();
+
+      return () => {
+        if (viewer && !viewer.isDestroyed()) {
+          if (routeWaypointsRef.current && !routeWaypointsRef.current.isDestroyed()) {
+            viewer.scene.primitives.remove(routeWaypointsRef.current);
+            routeWaypointsRef.current = null;
+          }
+          if (routeLabelsRef.current && !routeLabelsRef.current.isDestroyed()) {
+            viewer.scene.primitives.remove(routeLabelsRef.current);
+            routeLabelsRef.current = null;
+          }
+        }
+      };
     }, [maritimeRoute]);
 
     const portPointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null);

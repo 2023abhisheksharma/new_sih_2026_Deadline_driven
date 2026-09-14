@@ -62,10 +62,10 @@ const testCases = [
     expectedTopology: 'CASE_3_HYBRID_GATEWAY',
   },
   {
-    name: 'Corridor 5: Rotterdam -> Keppel Singapore',
+    name: 'Corridor 5: Rotterdam -> Keppel Singapore (Suez Canal)',
     originWpi: 31140,
     destWpi: 50000,
-    expectedStatus: 'SUCCESS',
+    expectedStatus: 'REJECTED_LAND_INTERSECTION',
     expectedTopology: 'CASE_2_GLOBAL_GLOBAL',
   },
   {

@@ -564,6 +564,24 @@ export class SpatialEdgeGrid {
     }
     return candidates;
   }
+
+  /**
+   * Fast zero-allocation presence test: returns true if any land edge occupies
+   * the specified bounding box, enabling instant bypass of open-ocean segments.
+   */
+  hasCandidateEdges(minLon: number, minLat: number, maxLon: number, maxLat: number): boolean {
+    const minCX = Math.floor(minLon / this.cellSize);
+    const maxCX = Math.floor(maxLon / this.cellSize);
+    const minCY = Math.floor(minLat / this.cellSize);
+    const maxCY = Math.floor(maxLat / this.cellSize);
+    for (let cx = minCX; cx <= maxCX; cx++) {
+      for (let cy = minCY; cy <= maxCY; cy++) {
+        const cell = this.grid.get(`${cx},${cy}`);
+        if (cell && cell.length > 0) return true;
+      }
+    }
+    return false;
+  }
 }
 
 // ============================================================================
@@ -711,5 +729,53 @@ export class SpatialPolygonGrid<T extends { bbox: [number, number, number, numbe
     }
     return Array.from(resultSet);
   }
+
+  /**
+   * Fast zero-allocation presence test: returns true if any land polygon bounding box
+   * overlaps the specified geographic bounding box, enabling instant bypass of open-ocean segments.
+   */
+  hasCandidateRings(minLon: number, minLat: number, maxLon: number, maxLat: number): boolean {
+    const minCX = Math.floor(minLon / this.cellSize);
+    const maxCX = Math.floor(maxLon / this.cellSize);
+    const minCY = Math.floor(minLat / this.cellSize);
+    const maxCY = Math.floor(maxLat / this.cellSize);
+    for (let cx = minCX; cx <= maxCX; cx++) {
+      for (let cy = minCY; cy <= maxCY; cy++) {
+        const cell = this.grid.get(`${cx},${cy}`);
+        if (cell && cell.length > 0) return true;
+      }
+    }
+    return false;
+  }
+}
+
+/**
+ * Calculates the great-circle cross-track distance (XTE) in meters from a target point
+ * to a geodesic track defined by start point (p1) and end point (p2).
+ * Positive indicates right of track, negative indicates left of track.
+ */
+export function calculateCrossTrackErrorMeters(
+  p1: [number, number],
+  p2: [number, number],
+  pTarget: [number, number]
+): number {
+  const d13 = calculateGeodesicDistanceMeters(p1[0], p1[1], pTarget[0], pTarget[1]) / EARTH_RADIUS_METERS;
+  const b13 = toRad(calculateBearingDeg(p1[0], p1[1], pTarget[0], pTarget[1]));
+  const b12 = toRad(calculateBearingDeg(p1[0], p1[1], p2[0], p2[1]));
+  const xt = Math.asin(Math.sin(d13) * Math.sin(b13 - b12));
+  return xt * EARTH_RADIUS_METERS;
+}
+
+/**
+ * Determines whether a course alteration between initial bearing and new bearing is PORT, STBD, or STRAIGHT.
+ */
+export function calculateTurnDirection(
+  initialBearingDeg: number,
+  newBearingDeg: number
+): 'PORT' | 'STBD' | 'STRAIGHT' {
+  let diff = (newBearingDeg - initialBearingDeg + 360.0) % 360.0;
+  if (diff < 1.0 || diff > 359.0) return 'STRAIGHT';
+  if (diff < 180.0) return 'STBD';
+  return 'PORT';
 }
 

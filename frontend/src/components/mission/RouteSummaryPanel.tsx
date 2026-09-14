@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, memo, type FC } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, memo, type FC } from 'react';
 import type { PortRecord } from '../../types/port';
 import type { MaritimeRouteResult } from '../../services/maritimeRoutingService';
 import type { IceHazardAnalysisReport, IcebergHazardItem } from '../../types/iceHazard';
@@ -74,10 +74,36 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = memo(({
 }) => {
   const [showHazardList, setShowHazardList] = useState<boolean>(false);
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const [showWaypoints, setShowWaypoints] = useState<boolean>(false);
+  const [copiedECDIS, setCopiedECDIS] = useState<boolean>(false);
   const [depQuery, setDepQuery] = useState<string>('');
   const [destQuery, setDestQuery] = useState<string>('');
   const [isSearchingDep, setIsSearchingDep] = useState<boolean>(false);
   const [isSearchingDest, setIsSearchingDest] = useState<boolean>(false);
+
+  const isSuccess = routeResult?.status === 'SUCCESS';
+  const isRejected = routeResult?.status === 'REJECTED_LAND_INTERSECTION';
+  const distKm = routeResult?.distanceKm || 0;
+  const distNm = kmToNauticalMiles(distKm);
+  const durationHours = routeResult?.durationHours || (distKm > 0 ? distKm / 27.78 : 0);
+
+  const handleExportECDIS = useCallback(() => {
+    if (!routeResult?.navigationalWaypoints) return;
+    const lines = [
+      '# ECDIS PASSAGE PLAN VOYAGE EXPORT',
+      `# Departure: ${departurePort?.portName ?? 'N/A'} (WPI ${departurePort?.wpiNumber ?? 'N/A'})`,
+      `# Destination: ${destinationPort?.portName ?? 'N/A'} (WPI ${destinationPort?.wpiNumber ?? 'N/A'})`,
+      `# Total Distance: ${Math.round(distNm)} NM (${Math.round(distKm)} km)`,
+      `# Generated: ${new Date().toISOString()}`,
+      'WP_NAME,LATITUDE,LONGITUDE,TRUE_BEARING_DEG,LEG_DIST_NM,TURN_DEG,TURN_DIR,CUMUL_DIST_NM,ZONE',
+      ...routeResult.navigationalWaypoints.map((w) =>
+        `${w.name},${w.coords[1].toFixed(5)},${w.coords[0].toFixed(5)},${w.trueBearingDeg.toFixed(1)},${w.legDistanceNm.toFixed(1)},${w.turnAngleDeg.toFixed(1)},${w.turnDirection},${w.cumulativeNm.toFixed(1)},${w.zone}`
+      ),
+    ];
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCopiedECDIS(true);
+    setTimeout(() => setCopiedECDIS(false), 2000);
+  }, [routeResult, departurePort, destinationPort, distNm, distKm]);
 
   const depResults = useMemo(
     () => (depQuery.trim() ? searchPorts(ports, depQuery, 6) : []),
@@ -105,15 +131,9 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = memo(({
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const isSuccess = routeResult?.status === 'SUCCESS';
-  const isRejected = routeResult?.status === 'REJECTED_LAND_INTERSECTION';
-  const distKm = routeResult?.distanceKm || 0;
-  const distNm = kmToNauticalMiles(distKm);
-  const durationHours = routeResult?.durationHours || (distKm > 0 ? distKm / 27.78 : 0);
-
   return (
     <div
-      className="absolute bottom-6 left-6 z-20 pointer-events-auto select-none font-sans w-72 flex flex-col gap-2"
+      className={`absolute bottom-6 left-6 z-20 pointer-events-auto select-none font-sans ${showWaypoints ? 'w-80 sm:w-96' : 'w-72 sm:w-80'} transition-all duration-150 flex flex-col gap-2`}
       role="region"
       aria-label="Maritime Mission"
     >
@@ -387,6 +407,111 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = memo(({
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                 <span>100% Water-Constrained • 0 Land Crossings</span>
               </div>
+
+              {/* PC4 Polar Voyage & Fuel Profile */}
+              {routeResult.voyageProfile && (
+                <div className="bg-polar-950/90 p-2 rounded border border-polar-800 flex flex-col gap-1 text-[10px]">
+                  <div className="flex items-center justify-between text-slate-300 font-medium">
+                    <span className="flex items-center gap-1 text-sky-400">
+                      <span>❄</span> PC4 Polar Profile
+                    </span>
+                    <span className="text-[9px] text-slate-400">
+                      Ice: {routeResult.voyageProfile.totalDistanceNm > 0
+                        ? ((routeResult.voyageProfile.polarZoneDistanceNm / routeResult.voyageProfile.totalDistanceNm) * 100).toFixed(1)
+                        : '0.0'}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9.5px] text-slate-400 pt-0.5">
+                    <div>
+                      <span className="text-slate-500">Pack Ice: </span>
+                      <span className="text-slate-200">{Math.round(routeResult.voyageProfile.polarZoneDistanceNm)} NM</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Open Water: </span>
+                      <span className="text-slate-200">{Math.round(routeResult.voyageProfile.openWaterDistanceNm)} NM</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Ice-Adjusted: </span>
+                      <span className="text-slate-200">~{formatTransitDuration(routeResult.voyageProfile.iceAdjustedDurationHours)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Fuel (MDO): </span>
+                      <span className="text-emerald-400 font-mono">~{routeResult.voyageProfile.estimatedFuelMdoTons.toFixed(1)} MT</span>
+                    </div>
+                  </div>
+                  <div className="text-[9px] text-slate-500 pt-0.5 flex items-center justify-between border-t border-polar-900">
+                    <span>Min Clearance: {routeResult.voyageProfile.minCoastalClearanceKm.toFixed(1)} km</span>
+                    <span>Speeds: 15 / 8.5 kn</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Bridge Navigation Waypoints Table & ECDIS Export */}
+              {routeResult.navigationalWaypoints && routeResult.navigationalWaypoints.length > 0 && (
+                <div className="flex flex-col gap-1 pt-0.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setShowWaypoints(!showWaypoints)}
+                      className="text-sky-400 hover:text-sky-300 transition-colors cursor-pointer flex items-center gap-1 font-medium"
+                    >
+                      <span>Waypoints ({routeResult.navigationalWaypoints.length})</span>
+                      <span>{showWaypoints ? '▲' : '▼'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportECDIS}
+                      className="text-[9.5px] text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded bg-polar-900 border border-polar-800 transition-colors cursor-pointer"
+                      title="Copy standard ECDIS CSV voyage plan to clipboard"
+                    >
+                      {copiedECDIS ? '✓ Copied ECDIS' : 'Export ECDIS'}
+                    </button>
+                  </div>
+
+                  {showWaypoints && (
+                    <div className="max-h-44 overflow-y-auto bg-polar-950 border border-polar-800 rounded p-1 text-[9px] font-mono select-text">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="text-slate-500 border-b border-polar-800 text-[8.5px]">
+                            <th className="py-0.5 px-1">WP</th>
+                            <th className="py-0.5 px-1">BRG</th>
+                            <th className="py-0.5 px-1">LEG</th>
+                            <th className="py-0.5 px-1">TURN</th>
+                            <th className="py-0.5 px-1 text-right">NM</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-polar-900 text-slate-300">
+                          {routeResult.navigationalWaypoints.map((wp) => (
+                            <tr key={wp.wpIndex} className="hover:bg-polar-900/50">
+                              <td className="py-0.5 px-1 font-medium truncate max-w-[75px]" title={wp.name}>
+                                {wp.zone === 'POLAR' ? '❄ ' : ''}{wp.name}
+                              </td>
+                              <td className="py-0.5 px-1 text-slate-400">
+                                {Math.round(wp.trueBearingDeg)}°T
+                              </td>
+                              <td className="py-0.5 px-1 text-slate-400">
+                                {wp.legDistanceNm > 0 ? wp.legDistanceNm.toFixed(1) : '-'}
+                              </td>
+                              <td className="py-0.5 px-1">
+                                {wp.turnDirection === 'STRAIGHT' ? (
+                                  <span className="text-slate-600">-</span>
+                                ) : (
+                                  <span className={wp.turnDirection === 'PORT' ? 'text-rose-400' : 'text-emerald-400'}>
+                                    {Math.round(wp.turnAngleDeg)}°{wp.turnDirection === 'PORT' ? 'P' : 'S'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-0.5 px-1 text-right text-slate-200">
+                                {wp.cumulativeNm.toFixed(1)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 text-[10px] text-slate-500 pt-0.5">
