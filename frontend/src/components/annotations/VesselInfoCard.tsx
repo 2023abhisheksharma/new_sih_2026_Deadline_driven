@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { memo, type FC } from 'react';
 import type { VesselConfiguration } from '../../config/vessel';
 
 interface VesselInfoCardProps {
@@ -18,7 +18,7 @@ interface VesselInfoCardProps {
  * Geographically anchored HUD telemetry plate for the research vessel.
  * Displays vessel identity, operational classification, and geographic coordinates.
  */
-export const VesselInfoCard: FC<VesselInfoCardProps> = ({
+export const VesselInfoCard: FC<VesselInfoCardProps> = memo(({
   vessel,
   screenPosition,
   onOpenTacticalView,
@@ -81,4 +81,6 @@ export const VesselInfoCard: FC<VesselInfoCardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+VesselInfoCard.displayName = 'VesselInfoCard';

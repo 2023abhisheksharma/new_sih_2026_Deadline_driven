@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { memo, type FC } from 'react';
 import type { PortRecord } from '../../types/port';
 
 interface DepartureAnnotationProps {
@@ -14,7 +14,7 @@ interface DepartureAnnotationProps {
  * Geographically anchored HUD badge displayed over the designated mission departure port.
  * Automatically handles viewport edge boundaries and 3D Earth curvature occlusion.
  */
-export const DepartureAnnotation: FC<DepartureAnnotationProps> = ({
+export const DepartureAnnotation: FC<DepartureAnnotationProps> = memo(({
   port,
   screenPosition,
 }) => {
@@ -58,4 +58,6 @@ export const DepartureAnnotation: FC<DepartureAnnotationProps> = ({
       </div>
     </div>
   );
-};
+});
+
+DepartureAnnotation.displayName = 'DepartureAnnotation';

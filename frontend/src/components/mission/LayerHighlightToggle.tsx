@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { memo, type FC } from 'react';
 import type { LayerFilterMode } from '../../types/navigation';
 
 interface LayerHighlightToggleProps {
@@ -22,7 +22,7 @@ interface LayerHighlightToggleProps {
  * Top-right interactive HUD toolbar enabling instantaneous isolation and visual
  * highlighting of specific operational target layers (All, Ports, Moving Ice, Fixed Ice).
  */
-export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = ({
+export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = memo(({
   activeMode,
   onSelectMode,
   portsCount = 3807,
@@ -86,7 +86,7 @@ export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = ({
               ? 'text-sky-300 font-medium underline underline-offset-4 decoration-sky-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
-          title="Isolate & highlight all ports (subdues icebergs)"
+          title="Isolate & highlight NGA World Port Index berths (3,807 ports)"
         >
           <span>Ports</span>
           <span className="text-[10px] text-slate-500">
@@ -98,7 +98,7 @@ export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = ({
           </span>
         </button>
 
-        {/* Moving Ice */}
+        {/* Drift Tracks */}
         <button
           type="button"
           onClick={() => handleToggle('MOVING')}
@@ -107,13 +107,13 @@ export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = ({
               ? 'text-amber-300 font-medium underline underline-offset-4 decoration-amber-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
-          title="Isolate & highlight moving icebergs (subdues ports and fixed ice)"
+          title="Isolate & highlight historical drift tracks (BYU/NIC 624 archive trajectories & USNIC observed large icebergs; not real-time telemetry)"
         >
-          <span>Moving Ice</span>
+          <span>Drift Tracks</span>
           <span className="text-[10px] text-slate-500">{driftingCount}</span>
         </button>
 
-        {/* Fixed Ice */}
+        {/* Grounded Ice */}
         <button
           type="button"
           onClick={() => handleToggle('FIXED')}
@@ -122,9 +122,9 @@ export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = ({
               ? 'text-rose-300 font-medium underline underline-offset-4 decoration-rose-400'
               : 'text-slate-400 hover:text-slate-200'
           }`}
-          title="Isolate & highlight fixed icebergs (subdues ports and moving ice)"
+          title="Isolate & highlight Sentinel-1 SAR radar-derived stationary/grounded icebergs (39,619 targets)"
         >
-          <span>Fixed Ice</span>
+          <span>Grounded Ice</span>
           <span className="text-[10px] text-slate-500">
             {(groundedCount / 1000).toFixed(1)}k
           </span>
@@ -132,4 +132,6 @@ export const LayerHighlightToggle: FC<LayerHighlightToggleProps> = ({
       </div>
     </div>
   );
-};
+});
+
+LayerHighlightToggle.displayName = 'LayerHighlightToggle';

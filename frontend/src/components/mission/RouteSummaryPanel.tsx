@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FC } from 'react';
+import { useState, useRef, useEffect, useMemo, memo, type FC } from 'react';
 import type { PortRecord } from '../../types/port';
 import type { MaritimeRouteResult } from '../../services/maritimeRoutingService';
 import type { IceHazardAnalysisReport, IcebergHazardItem } from '../../types/iceHazard';
@@ -52,7 +52,7 @@ interface RouteSummaryPanelProps {
  * - Route status, distance in nautical miles (NM), and estimated transit duration.
  * - Dynamic list of spatially detected iceberg hazards with one-click camera focus.
  */
-export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
+export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = memo(({
   ports,
   departurePort,
   destinationPort,
@@ -73,13 +73,20 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
   onOpenTacticalView,
 }) => {
   const [showHazardList, setShowHazardList] = useState<boolean>(false);
+  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
   const [depQuery, setDepQuery] = useState<string>('');
   const [destQuery, setDestQuery] = useState<string>('');
   const [isSearchingDep, setIsSearchingDep] = useState<boolean>(false);
   const [isSearchingDest, setIsSearchingDest] = useState<boolean>(false);
 
-  const depResults = depQuery.trim() ? searchPorts(ports, depQuery, 6) : [];
-  const destResults = destQuery.trim() ? searchPorts(ports, destQuery, 6) : [];
+  const depResults = useMemo(
+    () => (depQuery.trim() ? searchPorts(ports, depQuery, 6) : []),
+    [ports, depQuery]
+  );
+  const destResults = useMemo(
+    () => (destQuery.trim() ? searchPorts(ports, destQuery, 6) : []),
+    [ports, destQuery]
+  );
 
   const depContainerRef = useRef<HTMLDivElement>(null);
   const destContainerRef = useRef<HTMLDivElement>(null);
@@ -99,13 +106,14 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
   }, []);
 
   const isSuccess = routeResult?.status === 'SUCCESS';
+  const isRejected = routeResult?.status === 'REJECTED_LAND_INTERSECTION';
   const distKm = routeResult?.distanceKm || 0;
   const distNm = kmToNauticalMiles(distKm);
   const durationHours = routeResult?.durationHours || (distKm > 0 ? distKm / 27.78 : 0);
 
   return (
     <div
-      className="absolute bottom-6 left-6 z-20 pointer-events-auto select-none font-sans w-64 flex flex-col gap-2"
+      className="absolute bottom-6 left-6 z-20 pointer-events-auto select-none font-sans w-72 flex flex-col gap-2"
       role="region"
       aria-label="Maritime Mission"
     >
@@ -302,16 +310,86 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
 
       {/* Calculated Route Status & Metrics */}
       {departurePort && destinationPort && (
-        <div className="flex flex-col gap-1 text-[11px] text-slate-400 pt-0.5">
+        <div className="flex flex-col gap-1.5 text-[11px] text-slate-400 pt-1 border-t border-polar-800">
           {isCalculating ? (
-            <div className="text-slate-400">Calculating route...</div>
-          ) : isSuccess ? (
+            <div className="text-slate-400 flex items-center gap-1.5 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+              <span>Calculating maritime route...</span>
+            </div>
+          ) : isSuccess && routeResult ? (
             <>
-              <div className="text-slate-200 font-medium">
-                {Math.round(distNm).toLocaleString()} NM • {formatTransitDuration(durationHours)}
+              {/* Route Operational Header & Mode Badge */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span>VALIDATED ROUTE</span>
+                </div>
+                <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-polar-900 border border-polar-800 text-slate-300 font-sans">
+                  {routeResult.topology === 'CASE_1_POLAR_POLAR'
+                    ? 'Polar Graph'
+                    : routeResult.topology === 'CASE_2_GLOBAL_GLOBAL'
+                    ? 'Global MARNET'
+                    : 'Hybrid Gateway'}
+                </span>
               </div>
 
-              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+              {/* Distance & Duration (Explicitly Assumed 15 kn) */}
+              <div className="text-slate-100 font-semibold text-xs tracking-wide">
+                {Math.round(distNm).toLocaleString()} NM ({Math.round(distKm).toLocaleString()} km)
+              </div>
+              <div className="text-[10px] text-slate-400">
+                Estimated duration at assumed 15 kn: ~{formatTransitDuration(durationHours)}
+              </div>
+
+              {/* Waypoints & Quality Assessment */}
+              <div className="text-[10px] text-slate-400 flex items-center justify-between pt-0.5">
+                <span>Waypoints: {routeResult.finalNodeCount}</span>
+                {routeResult.routeQualityScore && (
+                  <span className="font-mono text-sky-300 text-[9.5px]">
+                    Q(R) = {routeResult.routeQualityScore.compositeScore.toFixed(4)}
+                  </span>
+                )}
+              </div>
+
+              {routeResult.routeQualityMetrics && (
+                <div className="text-[9.5px] text-slate-500 flex items-center justify-between">
+                  <span>Tortuosity: {routeResult.routeQualityMetrics.tortuosityRatio.toFixed(2)}x</span>
+                  <span>Mean Turn: {routeResult.routeQualityMetrics.meanCourseAlterationDeg.toFixed(1)}°</span>
+                </div>
+              )}
+
+              {/* Terminal Harbor Approach */}
+              {routeResult.terminalApproachStatus && (
+                <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                  <span className="text-slate-500">Terminal Approach:</span>
+                  <span className="text-slate-300">
+                    {routeResult.terminalApproachStatus === 'DIRECT_SAFE'
+                      ? 'Direct Safe'
+                      : routeResult.terminalApproachStatus === 'RADIAL_SCAN_SUCCESS'
+                      ? 'Radial Clearance (1.5 km @ 330°)'
+                      : 'Unavailable'}
+                  </span>
+                </div>
+              )}
+
+              {/* Transition Gateway */}
+              {routeResult.selectedGatewayId && (
+                <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                  <span className="text-slate-500">Transition Gateway:</span>
+                  <span className="font-mono text-sky-300 text-[9.5px]">
+                    {routeResult.selectedGatewayId}
+                  </span>
+                </div>
+              )}
+
+              {/* Hard Land Gate Status */}
+              <div className="text-[10px] text-emerald-400/90 flex items-center gap-1.5 pt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span>100% Water-Constrained • 0 Land Crossings</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 pt-0.5">
                 <button
                   type="button"
                   onClick={onFocusRoute}
@@ -339,7 +417,25 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
                 >
                   Swap
                 </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => setShowDiagnostics(!showDiagnostics)}
+                  className="hover:text-slate-300 transition-colors cursor-pointer ml-auto"
+                >
+                  {showDiagnostics ? 'Diagnostics ▲' : 'Diagnostics ▼'}
+                </button>
               </div>
+
+              {/* Collapsible Developer Diagnostics */}
+              {showDiagnostics && (
+                <div className="text-[9px] bg-polar-950 p-2 rounded border border-polar-800 text-slate-400 font-mono flex flex-col gap-1 max-h-28 overflow-y-auto">
+                  <div>Candidates: {routeResult.candidateCountAttempted}</div>
+                  <div>Nodes: {routeResult.rawNodeCount} → {routeResult.finalNodeCount}</div>
+                  <div>Dataset: {routeResult.provenance.dataset}</div>
+                  <div>Method: {routeResult.provenance.method}</div>
+                </div>
+              )}
 
               {/* Ice Hazard Information */}
               <div className="text-[10px] text-slate-500 mt-0.5">
@@ -352,11 +448,11 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
                       onClick={() => setShowHazardList(!showHazardList)}
                       className="text-left text-slate-400 hover:text-slate-200 cursor-pointer flex items-center justify-between"
                     >
-                      <span>{hazardReport.summary.totalHazards} ice hazards detected</span>
+                      <span>{hazardReport.summary.totalHazards} ice hazards detected (25 NM)</span>
                       <span>{showHazardList ? '▲' : '▼'}</span>
                     </button>
                     {showHazardList && (
-                      <div className="max-h-32 overflow-y-auto divide-y divide-polar-800 text-[10px] bg-polar-950 border border-polar-800 rounded p-1">
+                      <div className="max-h-28 overflow-y-auto divide-y divide-polar-800 text-[10px] bg-polar-950 border border-polar-800 rounded p-1">
                         {hazardReport.hazards.map((h, idx) => (
                           <div
                             key={`${h.sourceDataset}-${h.icebergId}-${idx}`}
@@ -380,17 +476,115 @@ export const RouteSummaryPanel: FC<RouteSummaryPanelProps> = ({
                     )}
                   </div>
                 ) : (
-                  <span>No iceberg hazards detected</span>
+                  <span>No iceberg hazards detected along corridor</span>
                 )}
               </div>
             </>
+          ) : isRejected && routeResult ? (
+            /* State 2: Route Constructed but Rejected by Hard Land Gate */
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                <span>ROUTE CONSTRUCTED BUT REJECTED</span>
+              </div>
+
+              <div className="text-[10.5px] text-slate-200 font-medium">
+                {routeResult.failureCategory || 'Land/ice validation failure'}
+              </div>
+
+              <div className="text-[10px] text-slate-400 leading-relaxed">
+                {routeResult.failureCategory === 'Internal MARNET topology failure'
+                  ? 'An internal Eurostat MARNET mesh edge cuts across a land polygon near the coastline. Route cannot be safely navigated.'
+                  : routeResult.failureCategory === 'Terminal harbor approach failure'
+                  ? 'Berth resides behind headlands/ria where water-safe connection to the offshore mesh exceeds 5 km without crossing land.'
+                  : routeResult.failingReason || 'Constructed path intersects land boundaries beyond the 1.5 km dock tolerance.'}
+              </div>
+
+              <div className="bg-polar-900/60 p-1.5 rounded border border-polar-800 text-[9.5px] grid grid-cols-2 gap-1 text-slate-400 font-mono">
+                <div>
+                  <span className="text-slate-500">Constructed: </span>
+                  <span className="text-slate-200">
+                    {Math.round(routeResult.constructedDistanceKm || 0).toLocaleString()} km
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Validated: </span>
+                  <span className="text-slate-200">0 NM (0.0 km)</span>
+                </div>
+                <div className="col-span-2 text-rose-400">
+                  Validation: FAILED (Unsafe for navigation)
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                <button
+                  type="button"
+                  onClick={onSwapPorts}
+                  className="hover:text-slate-300 transition-colors cursor-pointer"
+                >
+                  Swap Direction
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDiagnostics(!showDiagnostics)}
+                  className="hover:text-slate-300 transition-colors cursor-pointer"
+                >
+                  {showDiagnostics ? 'Diagnostics ▲' : 'Diagnostics ▼'}
+                </button>
+              </div>
+
+              {showDiagnostics && (
+                <div className="text-[9px] bg-polar-950 p-2 rounded border border-polar-800 text-slate-400 font-mono flex flex-col gap-1 max-h-28 overflow-y-auto">
+                  <div>Reason: {routeResult.failingReason || 'N/A'}</div>
+                  {routeResult.validationReport?.failingSegments?.[0] && (
+                    <div>
+                      First Crossing: Segment #{routeResult.validationReport.failingSegments[0].segmentIndex} (
+                      {routeResult.validationReport.failingSegments[0].lengthKm.toFixed(1)} km)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           ) : (
-            <div className="text-slate-500">
-              {routeResult?.failingReason || 'No feasible water route'}
+            /* State 3: Route Completely Unavailable */
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
+                <span>ROUTE UNAVAILABLE</span>
+              </div>
+
+              <div className="text-[10px] text-slate-400 leading-relaxed">
+                {routeResult?.failureCategory === 'Patagonian isolated fjord'
+                  ? 'Port belongs to a retained isolated Patagonian waterway; no continuous water route exists to the primary navigation network without synthetic edges.'
+                  : routeResult?.failingReason || 'No navigable water route exists between these ports.'}
+              </div>
+
+              <div className="bg-polar-900/60 p-1.5 rounded border border-polar-800 text-[9.5px] grid grid-cols-2 gap-1 text-slate-400 font-mono">
+                <div>
+                  <span className="text-slate-500">Constructed: </span>
+                  <span className="text-slate-300">0.0 km</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Validated: </span>
+                  <span className="text-slate-300">0 NM</span>
+                </div>
+              </div>
+
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={onSwapPorts}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                >
+                  Swap Direction
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
     </div>
   );
-};
+});
+
+RouteSummaryPanel.displayName = 'RouteSummaryPanel';

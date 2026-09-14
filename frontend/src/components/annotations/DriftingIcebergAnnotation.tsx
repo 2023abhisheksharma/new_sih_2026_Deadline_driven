@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { memo, type FC } from 'react';
 import type { DriftingIcebergTrajectoryRecord } from '../../types/driftingIceberg';
 
 interface DriftingIcebergAnnotationProps {
@@ -16,7 +16,7 @@ interface DriftingIcebergAnnotationProps {
  * Geographically anchored HUD card for a selected BYU / NIC drifting iceberg.
  * Displays observation dates, satellite sensors, track point count, and drift reach.
  */
-export const DriftingIcebergAnnotation: FC<DriftingIcebergAnnotationProps> = ({
+export const DriftingIcebergAnnotation: FC<DriftingIcebergAnnotationProps> = memo(({
   iceberg,
   screenPosition,
   onClose,
@@ -102,4 +102,6 @@ export const DriftingIcebergAnnotation: FC<DriftingIcebergAnnotationProps> = ({
       </div>
     </div>
   );
-};
+});
+
+DriftingIcebergAnnotation.displayName = 'DriftingIcebergAnnotation';

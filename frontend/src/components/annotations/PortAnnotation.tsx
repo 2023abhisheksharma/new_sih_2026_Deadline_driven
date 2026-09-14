@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { memo, type FC } from 'react';
 import type { PortRecord } from '../../types/port';
 
 interface PortAnnotationProps {
@@ -29,7 +29,7 @@ interface PortAnnotationProps {
  * Displays port identity, country/region, coordinates, and inline actions
  * to set or clear the port as departure or destination.
  */
-export const PortAnnotation: FC<PortAnnotationProps> = ({
+export const PortAnnotation: FC<PortAnnotationProps> = memo(({
   port,
   screenPosition,
   isDeparture = false,
@@ -146,4 +146,6 @@ export const PortAnnotation: FC<PortAnnotationProps> = ({
       </div>
     </div>
   );
-};
+});
+
+PortAnnotation.displayName = 'PortAnnotation';

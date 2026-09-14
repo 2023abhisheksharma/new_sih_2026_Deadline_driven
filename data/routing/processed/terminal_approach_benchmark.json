@@ -1,0 +1,475 @@
+{
+  "metadata": {
+    "benchmarkVersion": "Phase 7 Terminal Harbor Approaches & Route Quality Release",
+    "generatedAt": "2026-09-10T13:52:35.964Z",
+    "totalRoutesEvaluated": 17,
+    "determinismVerified": true,
+    "scoringWeights": {
+      "distanceWeight": 0.5,
+      "tortuosityWeight": 0.25,
+      "smoothnessWeight": 0.15,
+      "transitionDiscontinuityWeight": 0.1
+    }
+  },
+  "results": [
+    {
+      "label": "Stanley -> McMurdo Station",
+      "category": "Polar -> Polar",
+      "topology": "CASE_1_POLAR_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 12432.675664722481,
+      "constructedDistKm": 12432.675664722481,
+      "waypoints": 104,
+      "constructedWaypoints": 104,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "DIRECT_SAFE",
+      "qualityMetrics": {
+        "totalDistanceKm": 12432.675664722481,
+        "orthodromicDistanceKm": 5294.372265786696,
+        "tortuosityRatio": 2.3482813524589017,
+        "waypointCount": 104,
+        "meanCourseAlterationDeg": 12.172488865960442,
+        "maxCourseAlterationDeg": 93.09788224991615,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 0,
+        "terminalApproachRatio": 0
+      },
+      "qualityScore": {
+        "compositeScore": 0.37764530100126026,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 1.3482813524589017,
+        "normalizedSmoothness": 0.27049975257689873,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Stanley -> Scotia Bay (Laurie Is)",
+      "category": "Polar -> Polar",
+      "topology": "CASE_1_POLAR_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 1428.7222055720322,
+      "constructedDistKm": 1428.7222055720322,
+      "waypoints": 10,
+      "constructedWaypoints": 10,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "DIRECT_SAFE",
+      "qualityMetrics": {
+        "totalDistanceKm": 1428.7222055720322,
+        "orthodromicDistanceKm": 1287.4785966034572,
+        "tortuosityRatio": 1.1097055977017365,
+        "waypointCount": 10,
+        "meanCourseAlterationDeg": 34.80274639657003,
+        "maxCourseAlterationDeg": 151.09860561781,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 0,
+        "terminalApproachRatio": 0
+      },
+      "qualityScore": {
+        "compositeScore": 0.14343555408066755,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.10970559770173649,
+        "normalizedSmoothness": 0.7733943643682228,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Ushuaia -> Ellefsen Harbor",
+      "category": "Polar -> Polar",
+      "topology": "CASE_1_POLAR_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 1573.5769971766254,
+      "constructedDistKm": 1573.5769971766254,
+      "waypoints": 16,
+      "constructedWaypoints": 16,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "DIRECT_SAFE",
+      "qualityMetrics": {
+        "totalDistanceKm": 1573.5769971766254,
+        "orthodromicDistanceKm": 1517.5530984788145,
+        "tortuosityRatio": 1.0369172576260883,
+        "waypointCount": 16,
+        "meanCourseAlterationDeg": 17.97890549238995,
+        "maxCourseAlterationDeg": 94.37127590554286,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 0,
+        "terminalApproachRatio": 0
+      },
+      "qualityScore": {
+        "compositeScore": 0.06915899938115525,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.03691725762608833,
+        "normalizedSmoothness": 0.39953123316422107,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Ushuaia -> Scotia Bay (Laurie Is)",
+      "category": "Polar -> Polar",
+      "topology": "CASE_1_POLAR_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 1645.4875054487572,
+      "constructedDistKm": 1645.4875054487572,
+      "waypoints": 16,
+      "constructedWaypoints": 16,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "DIRECT_SAFE",
+      "qualityMetrics": {
+        "totalDistanceKm": 1645.4875054487572,
+        "orthodromicDistanceKm": 1534.651187326523,
+        "tortuosityRatio": 1.0722224822406186,
+        "waypointCount": 16,
+        "meanCourseAlterationDeg": 21.635130350612087,
+        "maxCourseAlterationDeg": 145.9957833463028,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 0,
+        "terminalApproachRatio": 0
+      },
+      "qualityScore": {
+        "compositeScore": 0.0901727217288616,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.07222248224061856,
+        "normalizedSmoothness": 0.4807806744580464,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Ushuaia -> McMurdo Station",
+      "category": "Polar -> Polar",
+      "topology": "CASE_1_POLAR_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 12552.111535914823,
+      "constructedDistKm": 12552.111535914823,
+      "waypoints": 110,
+      "constructedWaypoints": 110,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "DIRECT_SAFE",
+      "qualityMetrics": {
+        "totalDistanceKm": 12552.111535914823,
+        "orthodromicDistanceKm": 4799.994083128978,
+        "tortuosityRatio": 2.615026460143564,
+        "waypointCount": 110,
+        "meanCourseAlterationDeg": 11.713421425115914,
+        "maxCourseAlterationDeg": 81.03912111530644,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 0,
+        "terminalApproachRatio": 0
+      },
+      "qualityScore": {
+        "compositeScore": 0.4428013531196107,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 1.615026460143564,
+        "normalizedSmoothness": 0.26029825389146477,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Stanley -> Cape Town",
+      "category": "Polar -> Global",
+      "topology": "CASE_4_POLAR_GLOBAL",
+      "status": "SUCCESS",
+      "validatedDistKm": 6343.662296599933,
+      "constructedDistKm": 6343.662296599933,
+      "waypoints": 37,
+      "constructedWaypoints": 37,
+      "landCrossings": 0,
+      "gateways": [
+        "GW-+18.0_-35.0"
+      ],
+      "terminalApproachStatus": "RADIAL_SCAN_SUCCESS",
+      "qualityMetrics": {
+        "totalDistanceKm": 6343.662296599933,
+        "orthodromicDistanceKm": 6219.626909523776,
+        "tortuosityRatio": 1.019942576762318,
+        "waypointCount": 37,
+        "meanCourseAlterationDeg": 15.95760507580568,
+        "maxCourseAlterationDeg": 112.17236373208647,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 2.573391776975196,
+        "terminalApproachRatio": 0.00040566342542453415
+      },
+      "qualityScore": {
+        "compositeScore": 0.05967349354881705,
+        "normalizedDistance": 0.0029916648777705396,
+        "normalizedTortuosity": 0.01994257676231803,
+        "normalizedSmoothness": 0.35461344612901513,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Ellefsen Harbor -> Cape Town",
+      "category": "Polar -> Global",
+      "topology": "CASE_4_POLAR_GLOBAL",
+      "status": "SUCCESS",
+      "validatedDistKm": 5480.963034277214,
+      "constructedDistKm": 5480.963034277214,
+      "waypoints": 39,
+      "constructedWaypoints": 39,
+      "landCrossings": 0,
+      "gateways": [
+        "GW-+18.0_-35.0"
+      ],
+      "terminalApproachStatus": "RADIAL_SCAN_SUCCESS",
+      "qualityMetrics": {
+        "totalDistanceKm": 5480.963034277214,
+        "orthodromicDistanceKm": 5346.212652869302,
+        "tortuosityRatio": 1.025204830065185,
+        "waypointCount": 39,
+        "meanCourseAlterationDeg": 15.829325720936254,
+        "maxCourseAlterationDeg": 112.17236373208647,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 2.573391776975196,
+        "terminalApproachRatio": 0.0004695145289033234
+      },
+      "qualityScore": {
+        "compositeScore": 0.059065626586083775,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.025204830065185035,
+        "normalizedSmoothness": 0.35176279379858344,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "McMurdo Station -> Cape Town",
+      "category": "Polar -> Global",
+      "topology": "CASE_4_POLAR_GLOBAL",
+      "status": "SUCCESS",
+      "validatedDistKm": 10644.823604873103,
+      "constructedDistKm": 10644.823604873103,
+      "waypoints": 114,
+      "constructedWaypoints": 114,
+      "landCrossings": 0,
+      "gateways": [
+        "GW-+18.0_-35.0"
+      ],
+      "terminalApproachStatus": "RADIAL_SCAN_SUCCESS",
+      "qualityMetrics": {
+        "totalDistanceKm": 10644.823604873103,
+        "orthodromicDistanceKm": 7406.675318940425,
+        "tortuosityRatio": 1.4371932272570465,
+        "waypointCount": 114,
+        "meanCourseAlterationDeg": 10.105449566248499,
+        "maxCourseAlterationDeg": 112.17236373208647,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 2.573391776975196,
+        "terminalApproachRatio": 0.0002417505326999614
+      },
+      "qualityScore": {
+        "compositeScore": 0.1429831387017566,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.43719322725704646,
+        "normalizedSmoothness": 0.2245655459166333,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Cape Town -> Stanley",
+      "category": "Global -> Polar",
+      "topology": "CASE_3_GLOBAL_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 6343.66229659993,
+      "constructedDistKm": 6343.66229659993,
+      "waypoints": 37,
+      "constructedWaypoints": 37,
+      "landCrossings": 0,
+      "gateways": [
+        "GW-+18.0_-35.0"
+      ],
+      "terminalApproachStatus": "RADIAL_SCAN_SUCCESS",
+      "qualityMetrics": {
+        "totalDistanceKm": 6343.66229659993,
+        "orthodromicDistanceKm": 6219.626909523776,
+        "tortuosityRatio": 1.0199425767623176,
+        "waypointCount": 37,
+        "meanCourseAlterationDeg": 15.834891919882024,
+        "maxCourseAlterationDeg": 112.63361417674454,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 2.573391776975196,
+        "terminalApproachRatio": 0.00040566342542453437
+      },
+      "qualityScore": {
+        "compositeScore": 0.05926444969573822,
+        "normalizedDistance": 0.0029916648777708293,
+        "normalizedTortuosity": 0.019942576762317588,
+        "normalizedSmoothness": 0.3518864871084894,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Cape Town -> McMurdo Station",
+      "category": "Global -> Polar",
+      "topology": "CASE_3_GLOBAL_POLAR",
+      "status": "SUCCESS",
+      "validatedDistKm": 10644.790549609863,
+      "constructedDistKm": 10644.790549609863,
+      "waypoints": 101,
+      "constructedWaypoints": 101,
+      "landCrossings": 0,
+      "gateways": [
+        "GW-+18.0_-35.0"
+      ],
+      "terminalApproachStatus": "RADIAL_SCAN_SUCCESS",
+      "qualityMetrics": {
+        "totalDistanceKm": 10644.790549609863,
+        "orthodromicDistanceKm": 7406.675318940425,
+        "tortuosityRatio": 1.4371887643554317,
+        "waypointCount": 101,
+        "meanCourseAlterationDeg": 11.494881954805999,
+        "maxCourseAlterationDeg": 112.63361417674454,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 2.573391776975196,
+        "terminalApproachRatio": 0.00024175128340778038
+      },
+      "qualityScore": {
+        "compositeScore": 0.1476134642715446,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.43718876435543175,
+        "normalizedSmoothness": 0.2554418212179111,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Mumbai -> McMurdo Station",
+      "category": "Global -> Polar",
+      "topology": "CASE_3_GLOBAL_POLAR",
+      "status": "REJECTED_LAND_INTERSECTION",
+      "validatedDistKm": 0,
+      "constructedDistKm": 13967.037456345419,
+      "waypoints": 0,
+      "constructedWaypoints": 68,
+      "landCrossings": 1,
+      "gateways": [
+        "GW-+95.0_-36.0"
+      ],
+      "terminalApproachStatus": "DIRECT_SAFE",
+      "failureCategory": "Internal MARNET topology failure",
+      "diagnostic": "Internal MARNET topology failure: Line segment crosses land boundary polygon"
+    },
+    {
+      "label": "Cape Town -> Mumbai",
+      "category": "Global -> Global",
+      "topology": "CASE_2_GLOBAL_GLOBAL",
+      "status": "REJECTED_LAND_INTERSECTION",
+      "validatedDistKm": 0,
+      "constructedDistKm": 8835.090291675942,
+      "waypoints": 0,
+      "constructedWaypoints": 34,
+      "landCrossings": 1,
+      "gateways": [],
+      "terminalApproachStatus": "RADIAL_SCAN_SUCCESS",
+      "failureCategory": "Internal MARNET topology failure",
+      "diagnostic": "Internal MARNET topology failure: Line segment crosses land boundary polygon",
+      "qualityMetrics": {
+        "totalDistanceKm": 8835.090291675942,
+        "orthodromicDistanceKm": 8233.091908614388,
+        "tortuosityRatio": 1.0731193565848178,
+        "waypointCount": 34,
+        "meanCourseAlterationDeg": 25.65110325213209,
+        "maxCourseAlterationDeg": 112.63361417674454,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 5.2427196436492345,
+        "terminalApproachRatio": 0.0005933974040524191
+      },
+      "qualityScore": {
+        "compositeScore": 0.10378351665331141,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.07311935658481783,
+        "normalizedSmoothness": 0.5700245167140464,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Cape Town -> Sydney",
+      "category": "Global -> Global",
+      "topology": "CASE_2_GLOBAL_GLOBAL",
+      "status": "REJECTED_LAND_INTERSECTION",
+      "validatedDistKm": 0,
+      "constructedDistKm": 11985.671540426905,
+      "waypoints": 0,
+      "constructedWaypoints": 29,
+      "landCrossings": 1,
+      "gateways": [],
+      "terminalApproachStatus": "APPROACH_UNAVAILABLE",
+      "failureCategory": "Terminal harbor approach failure",
+      "diagnostic": "Terminal harbor approach failure: Terminal harbor approach segment crosses land/peninsula beyond 1.5 km dock tolerance",
+      "qualityMetrics": {
+        "totalDistanceKm": 11985.671540426905,
+        "orthodromicDistanceKm": 11012.479470563205,
+        "tortuosityRatio": 1.0883717488386773,
+        "waypointCount": 29,
+        "meanCourseAlterationDeg": 28.339840780261486,
+        "maxCourseAlterationDeg": 112.63361417674454,
+        "gatewayTransitionDistanceKm": 0,
+        "terminalApproachCostKm": 33.971212837902755,
+        "terminalApproachRatio": 0.002834318688220349
+      },
+      "qualityScore": {
+        "compositeScore": 0.11655907314387427,
+        "normalizedDistance": 0,
+        "normalizedTortuosity": 0.08837174883867727,
+        "normalizedSmoothness": 0.6297742395613664,
+        "normalizedTransition": 0
+      }
+    },
+    {
+      "label": "Puerto Natales -> Ellefsen Harbor",
+      "category": "Patagonian Isolated",
+      "topology": "CASE_6_PATAGONIAN_ISOLATED",
+      "status": "HYBRID_UNAVAILABLE",
+      "validatedDistKm": 0,
+      "constructedDistKm": 0,
+      "waypoints": 0,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "APPROACH_UNAVAILABLE",
+      "failureCategory": "Patagonian isolated fjord",
+      "diagnostic": "Port belongs to retained isolated Patagonian component; hybrid routing unavailable without synthetic edges."
+    },
+    {
+      "label": "Caleta Mina Elena -> Ellefsen Harbor",
+      "category": "Patagonian Isolated",
+      "topology": "CASE_6_PATAGONIAN_ISOLATED",
+      "status": "HYBRID_UNAVAILABLE",
+      "validatedDistKm": 0,
+      "constructedDistKm": 0,
+      "waypoints": 0,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "APPROACH_UNAVAILABLE",
+      "failureCategory": "Patagonian isolated fjord",
+      "diagnostic": "Port belongs to retained isolated Patagonian component; hybrid routing unavailable without synthetic edges."
+    },
+    {
+      "label": "Puerto Natales -> McMurdo Station",
+      "category": "Patagonian Isolated",
+      "topology": "CASE_6_PATAGONIAN_ISOLATED",
+      "status": "HYBRID_UNAVAILABLE",
+      "validatedDistKm": 0,
+      "constructedDistKm": 0,
+      "waypoints": 0,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "APPROACH_UNAVAILABLE",
+      "failureCategory": "Patagonian isolated fjord",
+      "diagnostic": "Port belongs to retained isolated Patagonian component; hybrid routing unavailable without synthetic edges."
+    },
+    {
+      "label": "Caleta Mina Elena -> McMurdo Station",
+      "category": "Patagonian Isolated",
+      "topology": "CASE_6_PATAGONIAN_ISOLATED",
+      "status": "HYBRID_UNAVAILABLE",
+      "validatedDistKm": 0,
+      "constructedDistKm": 0,
+      "waypoints": 0,
+      "landCrossings": 0,
+      "gateways": [],
+      "terminalApproachStatus": "APPROACH_UNAVAILABLE",
+      "failureCategory": "Patagonian isolated fjord",
+      "diagnostic": "Port belongs to retained isolated Patagonian component; hybrid routing unavailable without synthetic edges."
+    }
+  ]
+}

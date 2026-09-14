@@ -1,0 +1,27 @@
+{
+  "dataset": "polarWaterGraph",
+  "provenance": {
+    "originalFile": "data/routing/raw/polarWaterGraph_v1_original.json",
+    "timestamp": "2026-09-10T16:20:00.000Z",
+    "source": "GEBCO 2024 / SCAR ADD / Natural Earth 10m",
+    "version": "2026.1 Polar Navigation Release"
+  },
+  "originalTopology": {
+    "nodes": 17718,
+    "edges": 577063,
+    "connectedComponents": 34,
+    "primaryComponentNodes": 17681,
+    "isolatedComponents": 33,
+    "isolatedNodes": 37
+  },
+  "pruningDecision": {
+    "approvedStrategy": "prune_zero_degree_artifacts_retain_legitimate_waterways",
+    "rationale": "30 components consist of isolated single nodes with 0 edges (rasterization grid artifacts). 3 components (Comp 19: 3 nodes in Seno Otway, Comp 23: 2 nodes in Canal Smyth, Comp 31: 2 nodes in Canal Messier) represent legitimate navigable waterways with valid internal edges that are retained for future high-resolution coastal channel/gateway work.",
+    "componentsRemoved": 30,
+    "nodesRemoved": 30,
+    "edgesRemoved": 0,
+    "retainedComponents": 4,
+    "retainedNodes": 17688,
+    "retainedEdges": 577063
+  }
+}

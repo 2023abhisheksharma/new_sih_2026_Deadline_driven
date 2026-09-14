@@ -1,0 +1,644 @@
+[
+  {
+    "targetLatitudeDeg": -31,
+    "corridorHalfWidthDeg": 0.75,
+    "polarCandidateCount": 288,
+    "primaryPolarCount": 288,
+    "nonPrimaryPolarCount": 0,
+    "marnetCandidateCount": 24,
+    "viableGatewayPairCount": 35,
+    "rejections": {
+      "distanceExceeded": 253,
+      "landIntersection": 0,
+      "lineOfSightBlocked": 0,
+      "nonPrimaryComponent": 0
+    },
+    "transitionDistanceKm": {
+      "min": 1.11,
+      "median": 71.08,
+      "mean": 62.01,
+      "p90": 88.75
+    },
+    "landClearanceKm": {
+      "min": 67.05,
+      "median": 500
+    },
+    "sectorCoverage": {
+      "totalSectorsCovered": 5,
+      "totalSectors": 7,
+      "coveredSectors": [
+        "Weddell Sea Sector",
+        "Atlantic Southern Ocean",
+        "Indian Ocean Sector",
+        "Ross Sea / New Zealand Sector",
+        "Pacific Southern Ocean"
+      ],
+      "sectorDistribution": {
+        "Drake Passage / Antarctic Peninsula": 0,
+        "Weddell Sea Sector": 7,
+        "Atlantic Southern Ocean": 10,
+        "Indian Ocean Sector": 9,
+        "Australian Sector": 0,
+        "Ross Sea / New Zealand Sector": 4,
+        "Pacific Southern Ocean": 5
+      }
+    },
+    "sampleGateways": [
+      {
+        "polarNodeId": 14149,
+        "polarCoords": [
+          -140,
+          -31
+        ],
+        "globalCoords": [
+          -139.999,
+          -31.577
+        ],
+        "transitionDistanceKm": 64.15963166029229,
+        "landClearanceKm": 500,
+        "degree": 12,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 14150,
+        "polarCoords": [
+          -139,
+          -31
+        ],
+        "globalCoords": [
+          -138.86,
+          -31.239
+        ],
+        "transitionDistanceKm": 29.73000503755322,
+        "landClearanceKm": 500,
+        "degree": 12,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 14151,
+        "polarCoords": [
+          -138,
+          -31
+        ],
+        "globalCoords": [
+          -138.86,
+          -31.239
+        ],
+        "transitionDistanceKm": 86.07129248054468,
+        "landClearanceKm": 500,
+        "degree": 12,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 14177,
+        "polarCoords": [
+          -112,
+          -31
+        ],
+        "globalCoords": [
+          -111.268,
+          -31.379
+        ],
+        "transitionDistanceKm": 81.38979688774863,
+        "landClearanceKm": 500,
+        "degree": 12,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 14178,
+        "polarCoords": [
+          -111,
+          -31
+        ],
+        "globalCoords": [
+          -111.268,
+          -31.379
+        ],
+        "transitionDistanceKm": 49.253536971566746,
+        "landClearanceKm": 500,
+        "degree": 12,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      }
+    ]
+  },
+  {
+    "targetLatitudeDeg": -33,
+    "corridorHalfWidthDeg": 0.75,
+    "polarCandidateCount": 305,
+    "primaryPolarCount": 305,
+    "nonPrimaryPolarCount": 0,
+    "marnetCandidateCount": 45,
+    "viableGatewayPairCount": 74,
+    "rejections": {
+      "distanceExceeded": 231,
+      "landIntersection": 0,
+      "lineOfSightBlocked": 0,
+      "nonPrimaryComponent": 0
+    },
+    "transitionDistanceKm": {
+      "min": 0,
+      "median": 63.6,
+      "mean": 63.54,
+      "p90": 95.61
+    },
+    "landClearanceKm": {
+      "min": 9.24,
+      "median": 500
+    },
+    "sectorCoverage": {
+      "totalSectorsCovered": 7,
+      "totalSectors": 7,
+      "coveredSectors": [
+        "Drake Passage / Antarctic Peninsula",
+        "Weddell Sea Sector",
+        "Atlantic Southern Ocean",
+        "Indian Ocean Sector",
+        "Australian Sector",
+        "Ross Sea / New Zealand Sector",
+        "Pacific Southern Ocean"
+      ],
+      "sectorDistribution": {
+        "Drake Passage / Antarctic Peninsula": 2,
+        "Weddell Sea Sector": 23,
+        "Atlantic Southern Ocean": 14,
+        "Indian Ocean Sector": 10,
+        "Australian Sector": 6,
+        "Ross Sea / New Zealand Sector": 11,
+        "Pacific Southern Ocean": 8
+      }
+    },
+    "sampleGateways": [
+      {
+        "polarNodeId": 13527,
+        "polarCoords": [
+          -161,
+          -33
+        ],
+        "globalCoords": [
+          -159.999,
+          -32.943
+        ],
+        "transitionDistanceKm": 93.5939327784641,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 13528,
+        "polarCoords": [
+          -160,
+          -33
+        ],
+        "globalCoords": [
+          -159.999,
+          -32.943
+        ],
+        "transitionDistanceKm": 6.338806041398313,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 13529,
+        "polarCoords": [
+          -159,
+          -33
+        ],
+        "globalCoords": [
+          -159.999,
+          -32.943
+        ],
+        "transitionDistanceKm": 93.40779173541266,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 13541,
+        "polarCoords": [
+          -147,
+          -33
+        ],
+        "globalCoords": [
+          -146.83,
+          -33.447
+        ],
+        "transitionDistanceKm": 52.159020110116025,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 13542,
+        "polarCoords": [
+          -146,
+          -33
+        ],
+        "globalCoords": [
+          -145.346,
+          -33.164
+        ],
+        "transitionDistanceKm": 63.60289378991358,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Pacific Southern Ocean",
+        "latitudeDeviationDeg": 0
+      }
+    ]
+  },
+  {
+    "targetLatitudeDeg": -35,
+    "corridorHalfWidthDeg": 0.75,
+    "polarCandidateCount": 329,
+    "primaryPolarCount": 329,
+    "nonPrimaryPolarCount": 0,
+    "marnetCandidateCount": 99,
+    "viableGatewayPairCount": 104,
+    "rejections": {
+      "distanceExceeded": 224,
+      "landIntersection": 0,
+      "lineOfSightBlocked": 1,
+      "nonPrimaryComponent": 0
+    },
+    "transitionDistanceKm": {
+      "min": 0,
+      "median": 55.56,
+      "mean": 56.96,
+      "p90": 91.99
+    },
+    "landClearanceKm": {
+      "min": 1.06,
+      "median": 500
+    },
+    "sectorCoverage": {
+      "totalSectorsCovered": 7,
+      "totalSectors": 7,
+      "coveredSectors": [
+        "Drake Passage / Antarctic Peninsula",
+        "Weddell Sea Sector",
+        "Atlantic Southern Ocean",
+        "Indian Ocean Sector",
+        "Australian Sector",
+        "Ross Sea / New Zealand Sector",
+        "Pacific Southern Ocean"
+      ],
+      "sectorDistribution": {
+        "Drake Passage / Antarctic Peninsula": 3,
+        "Weddell Sea Sector": 20,
+        "Atlantic Southern Ocean": 23,
+        "Indian Ocean Sector": 21,
+        "Australian Sector": 10,
+        "Ross Sea / New Zealand Sector": 19,
+        "Pacific Southern Ocean": 8
+      }
+    },
+    "sampleGateways": [
+      {
+        "polarNodeId": 12867,
+        "polarCoords": [
+          -176,
+          -35
+        ],
+        "globalCoords": [
+          -175.307,
+          -35.102
+        ],
+        "transitionDistanceKm": 64.09435118668723,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12868,
+        "polarCoords": [
+          -175,
+          -35
+        ],
+        "globalCoords": [
+          -175.307,
+          -35.102
+        ],
+        "transitionDistanceKm": 30.159721477512733,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12878,
+        "polarCoords": [
+          -165,
+          -35
+        ],
+        "globalCoords": [
+          -165,
+          -35.386
+        ],
+        "transitionDistanceKm": 42.921300970144,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12886,
+        "polarCoords": [
+          -157,
+          -35
+        ],
+        "globalCoords": [
+          -156.028,
+          -35.201
+        ],
+        "transitionDistanceKm": 91.20679116125929,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12887,
+        "polarCoords": [
+          -156,
+          -35
+        ],
+        "globalCoords": [
+          -156.028,
+          -35.201
+        ],
+        "transitionDistanceKm": 22.494898705883326,
+        "landClearanceKm": 500,
+        "degree": 20,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      }
+    ]
+  },
+  {
+    "targetLatitudeDeg": -37,
+    "corridorHalfWidthDeg": 0.75,
+    "polarCandidateCount": 332,
+    "primaryPolarCount": 332,
+    "nonPrimaryPolarCount": 0,
+    "marnetCandidateCount": 41,
+    "viableGatewayPairCount": 61,
+    "rejections": {
+      "distanceExceeded": 269,
+      "landIntersection": 0,
+      "lineOfSightBlocked": 2,
+      "nonPrimaryComponent": 0
+    },
+    "transitionDistanceKm": {
+      "min": 0,
+      "median": 73.36,
+      "mean": 65.85,
+      "p90": 95.63
+    },
+    "landClearanceKm": {
+      "min": 38.66,
+      "median": 500
+    },
+    "sectorCoverage": {
+      "totalSectorsCovered": 6,
+      "totalSectors": 7,
+      "coveredSectors": [
+        "Drake Passage / Antarctic Peninsula",
+        "Atlantic Southern Ocean",
+        "Indian Ocean Sector",
+        "Australian Sector",
+        "Ross Sea / New Zealand Sector",
+        "Pacific Southern Ocean"
+      ],
+      "sectorDistribution": {
+        "Drake Passage / Antarctic Peninsula": 1,
+        "Weddell Sea Sector": 0,
+        "Atlantic Southern Ocean": 2,
+        "Indian Ocean Sector": 27,
+        "Australian Sector": 4,
+        "Ross Sea / New Zealand Sector": 23,
+        "Pacific Southern Ocean": 4
+      }
+    },
+    "sampleGateways": [
+      {
+        "polarNodeId": 12199,
+        "polarCoords": [
+          -180,
+          -37
+        ],
+        "globalCoords": [
+          -179.403,
+          -37.01
+        ],
+        "transitionDistanceKm": 53.024277565383045,
+        "landClearanceKm": 500,
+        "degree": 13,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12200,
+        "polarCoords": [
+          -179,
+          -37
+        ],
+        "globalCoords": [
+          -179.403,
+          -37.01
+        ],
+        "transitionDistanceKm": 35.803039793767795,
+        "landClearanceKm": 500,
+        "degree": 18,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12205,
+        "polarCoords": [
+          -174,
+          -37
+        ],
+        "globalCoords": [
+          -173.465,
+          -36.802
+        ],
+        "transitionDistanceKm": 52.419706355622104,
+        "landClearanceKm": 500,
+        "degree": 22,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12206,
+        "polarCoords": [
+          -173,
+          -37
+        ],
+        "globalCoords": [
+          -173.465,
+          -36.802
+        ],
+        "transitionDistanceKm": 46.84397564380763,
+        "landClearanceKm": 500,
+        "degree": 22,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 12208,
+        "polarCoords": [
+          -171,
+          -37
+        ],
+        "globalCoords": [
+          -169.998,
+          -36.681
+        ],
+        "transitionDistanceKm": 95.96384546479997,
+        "landClearanceKm": 500,
+        "degree": 22,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      }
+    ]
+  },
+  {
+    "targetLatitudeDeg": -40,
+    "corridorHalfWidthDeg": 0.75,
+    "polarCandidateCount": 346,
+    "primaryPolarCount": 346,
+    "nonPrimaryPolarCount": 0,
+    "marnetCandidateCount": 88,
+    "viableGatewayPairCount": 192,
+    "rejections": {
+      "distanceExceeded": 154,
+      "landIntersection": 0,
+      "lineOfSightBlocked": 0,
+      "nonPrimaryComponent": 0
+    },
+    "transitionDistanceKm": {
+      "min": 0,
+      "median": 85.18,
+      "mean": 57.49,
+      "p90": 85.94
+    },
+    "landClearanceKm": {
+      "min": 5.02,
+      "median": 500
+    },
+    "sectorCoverage": {
+      "totalSectorsCovered": 7,
+      "totalSectors": 7,
+      "coveredSectors": [
+        "Drake Passage / Antarctic Peninsula",
+        "Weddell Sea Sector",
+        "Atlantic Southern Ocean",
+        "Indian Ocean Sector",
+        "Australian Sector",
+        "Ross Sea / New Zealand Sector",
+        "Pacific Southern Ocean"
+      ],
+      "sectorDistribution": {
+        "Drake Passage / Antarctic Peninsula": 5,
+        "Weddell Sea Sector": 18,
+        "Atlantic Southern Ocean": 23,
+        "Indian Ocean Sector": 55,
+        "Australian Sector": 17,
+        "Ross Sea / New Zealand Sector": 32,
+        "Pacific Southern Ocean": 42
+      }
+    },
+    "sampleGateways": [
+      {
+        "polarNodeId": 11174,
+        "polarCoords": [
+          -180,
+          -40
+        ],
+        "globalCoords": [
+          -180,
+          -40
+        ],
+        "transitionDistanceKm": 0,
+        "landClearanceKm": 500,
+        "degree": 13,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 11175,
+        "polarCoords": [
+          -179,
+          -40
+        ],
+        "globalCoords": [
+          -180,
+          -40
+        ],
+        "transitionDistanceKm": 85.17992660565153,
+        "landClearanceKm": 500,
+        "degree": 18,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 11183,
+        "polarCoords": [
+          -171,
+          -40
+        ],
+        "globalCoords": [
+          -170,
+          -40
+        ],
+        "transitionDistanceKm": 85.17992660565153,
+        "landClearanceKm": 500,
+        "degree": 22,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 11184,
+        "polarCoords": [
+          -170,
+          -40
+        ],
+        "globalCoords": [
+          -170,
+          -40
+        ],
+        "transitionDistanceKm": 0,
+        "landClearanceKm": 500,
+        "degree": 22,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      },
+      {
+        "polarNodeId": 11185,
+        "polarCoords": [
+          -169,
+          -40
+        ],
+        "globalCoords": [
+          -170,
+          -40
+        ],
+        "transitionDistanceKm": 85.17992660565153,
+        "landClearanceKm": 500,
+        "degree": 22,
+        "sector": "Ross Sea / New Zealand Sector",
+        "latitudeDeviationDeg": 0
+      }
+    ]
+  }
+]

@@ -19,7 +19,7 @@
  *    - Continuous Great Circle interpolation along route geometry at selectable time-multipliers (1x to 30x).
  */
 
-import { useRef, useState, useEffect, type FC } from 'react';
+import { useRef, useState, useEffect, useMemo, useCallback, type FC } from 'react';
 import {
   CesiumGlobe,
   CesiumGlobeRef,
@@ -31,6 +31,7 @@ import {
   DriftingIcebergAnnotation,
   RouteSummaryPanel,
   LayerHighlightToggle,
+  Header,
 } from '../components';
 import { DEMO_VESSEL_CONFIG, VesselConfiguration } from '../config/vessel';
 import type {
@@ -82,6 +83,7 @@ export const AntarcticOverview: FC = () => {
   // Maritime Route & Hazard Analysis
   const [routeResult, setRouteResult] = useState<MaritimeRouteResult | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState<boolean>(false);
+  const routeRequestIdRef = useRef<number>(0);
 
   const [hazardReport, setHazardReport] = useState<IceHazardAnalysisReport | null>(null);
   const [isAnalyzingHazards, setIsAnalyzingHazards] = useState<boolean>(false);
@@ -99,7 +101,7 @@ export const AntarcticOverview: FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const feedbackTimerRef = useRef<number | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     if (feedbackTimerRef.current) {
       window.clearTimeout(feedbackTimerRef.current);
     }
@@ -108,7 +110,7 @@ export const AntarcticOverview: FC = () => {
       setFeedbackMessage(null);
       feedbackTimerRef.current = null;
     }, 2800);
-  };
+  }, []);
 
   // ─── URL Query Route Synchronization ─────────────────────────────────────
   // Parse initial view and filter from URL search parameters on mount
@@ -141,7 +143,7 @@ export const AntarcticOverview: FC = () => {
   }, []);
 
   // Update browser URL query params without triggering full page reload
-  const updateUrlParams = (view: '3D_GLOBE' | '2D_TACTICAL', filter: LayerFilterMode) => {
+  const updateUrlParams = useCallback((view: '3D_GLOBE' | '2D_TACTICAL', filter: LayerFilterMode) => {
     const params = new URLSearchParams(window.location.search);
     if (view === '2D_TACTICAL') {
       params.set('view', 'tactical');
@@ -158,31 +160,30 @@ export const AntarcticOverview: FC = () => {
     if (window.location.search !== (newSearch ? `?${newSearch}` : '')) {
       window.history.pushState(null, '', newUrl);
     }
-  };
+  }, []);
 
-  const handleSelectLayerFilter = (mode: LayerFilterMode) => {
+  const handleSelectLayerFilter = useCallback((mode: LayerFilterMode) => {
     setLayerFilter(mode);
     updateUrlParams(activeView, mode);
     if (mode === 'PORTS') {
-      showToast(`Isolated & Highlighted: All Maritime Ports (${ports.length > 0 ? ports.length.toLocaleString() : '3,807'} points)`);
+      showToast(`Isolated & Highlighted: Maritime Ports (NGA WPI Pub 150 - ${ports.length > 0 ? ports.length.toLocaleString() : '3,807'} berths)`);
     } else if (mode === 'MOVING') {
-      const movingCount = (icebergs.length + driftingIcebergs.length) || 624;
-      showToast(`Isolated & Highlighted: Moving Icebergs (${movingCount.toLocaleString()} drifting & tracked targets)`);
+      showToast(`Isolated & Highlighted: Historical Drift Tracks & Observed Ice (${driftingIcebergs.length || 624} BYU/NIC tracks, ${icebergs.length || 33} USNIC icebergs)`);
     } else if (mode === 'FIXED') {
-      showToast(`Isolated & Highlighted: Fixed Grounded Icebergs (${sentinel1Icebergs.length > 0 ? sentinel1Icebergs.length.toLocaleString() : '39,619'} stationary targets)`);
+      showToast(`Isolated & Highlighted: Grounded Radar Targets (${sentinel1Icebergs.length > 0 ? sentinel1Icebergs.length.toLocaleString() : '39,619'} Sentinel-1 SAR observations)`);
     } else {
-      showToast('Displaying All Navigation Layers (Default View)');
+      showToast('Displaying All Navigation Target Layers');
     }
-  };
+  }, [activeView, ports.length, driftingIcebergs.length, icebergs.length, sentinel1Icebergs.length, showToast, updateUrlParams]);
 
-  const handleSelectPort = (port: PortRecord | null) => {
+  const handleSelectPort = useCallback((port: PortRecord | null) => {
     if (port) {
       setFeedbackMessage(null);
     }
     setSelectedPort(port);
-  };
+  }, []);
 
-  const handleSetDeparture = (port?: PortRecord) => {
+  const handleSetDeparture = useCallback((port?: PortRecord) => {
     const target = port || selectedPort;
     if (!target) return;
 
@@ -192,9 +193,9 @@ export const AntarcticOverview: FC = () => {
     }
     setDeparturePort(target);
     showToast(`Departure set to ${target.portName}`);
-  };
+  }, [selectedPort, destinationPort, showToast]);
 
-  const handleSelectDepartureFromSearch = (port: PortRecord) => {
+  const handleSelectDepartureFromSearch = useCallback((port: PortRecord) => {
     if (destinationPort?.wpiNumber === port.wpiNumber) {
       showToast("Departure and destination cannot be the same port");
       return;
@@ -203,15 +204,15 @@ export const AntarcticOverview: FC = () => {
     setSelectedPort(port);
     globeRef.current?.flyToPort(port);
     showToast(`Departure set to ${port.portName} (WPI ${port.wpiNumber})`);
-  };
+  }, [destinationPort, showToast]);
 
-  const handleClearDeparture = () => {
+  const handleClearDeparture = useCallback(() => {
     setDeparturePort(null);
     setRouteResult(null);
     showToast("Departure port cleared");
-  };
+  }, [showToast]);
 
-  const handleSetDestination = (port?: PortRecord) => {
+  const handleSetDestination = useCallback((port?: PortRecord) => {
     const target = port || selectedPort;
     if (!target) return;
 
@@ -221,9 +222,9 @@ export const AntarcticOverview: FC = () => {
     }
     setDestinationPort(target);
     showToast(`Destination set to ${target.portName}`);
-  };
+  }, [selectedPort, departurePort, showToast]);
 
-  const handleSelectDestinationFromSearch = (port: PortRecord) => {
+  const handleSelectDestinationFromSearch = useCallback((port: PortRecord) => {
     if (departurePort?.wpiNumber === port.wpiNumber) {
       showToast("Departure and destination cannot be the same port");
       return;
@@ -232,36 +233,48 @@ export const AntarcticOverview: FC = () => {
     setSelectedPort(port);
     globeRef.current?.flyToPort(port);
     showToast(`Destination set to ${port.portName} (WPI ${port.wpiNumber})`);
-  };
+  }, [departurePort, showToast]);
 
-  const handleClearDestination = () => {
+  const handleClearDestination = useCallback(() => {
     setDestinationPort(null);
     setRouteResult(null);
     showToast("Destination port cleared");
-  };
+  }, [showToast]);
 
-  const handleSwapPorts = () => {
+  const handleSwapPorts = useCallback(() => {
     if (!departurePort || !destinationPort) return;
     const prevDep = departurePort;
     const prevDest = destinationPort;
     setDeparturePort(prevDest);
     setDestinationPort(prevDep);
     showToast(`Swapped route direction: ${prevDest.portName} → ${prevDep.portName}`);
-  };
+  }, [departurePort, destinationPort, showToast]);
 
-  const handleClearRoute = () => {
+  const handleClearRoute = useCallback(() => {
     setDeparturePort(null);
     setDestinationPort(null);
     setRouteResult(null);
     showToast("Active maritime route cleared");
-  };
+  }, [showToast]);
 
-  // Compute route whenever departure or destination changes
+  // Compute route whenever departure or destination changes (Single Authoritative Owner)
   useEffect(() => {
     let cancelled = false;
+    const currentRequestId = ++routeRequestIdRef.current;
+
+    // MANDATORY PRE-FLIGHT CLEARING:
+    // When endpoints change, immediately clear previous route state so the old
+    // route polyline disappears from the 3D globe and 2D tactical view without lingering.
+    setRouteResult(null);
+    setRouteProfile(null);
+    setSimDistanceMeters(0);
+    setSimStatus('IDLE');
+    setHazardReport(null);
+    setIsAnalyzingHazards(false);
 
     if (departurePort && destinationPort) {
       if (departurePort.wpiNumber === destinationPort.wpiNumber) {
+        setIsCalculatingRoute(false);
         setRouteResult({
           status: "NO_FEASIBLE_ROUTE",
           routeName: "Computed Maritime Route",
@@ -285,39 +298,46 @@ export const AntarcticOverview: FC = () => {
       setIsCalculatingRoute(true);
       computeMaritimeRoute(departurePort, destinationPort)
         .then((res) => {
-          if (!cancelled) {
+          // Drop response if component unmounted or if a newer calculation request was initiated
+          if (cancelled || currentRequestId !== routeRequestIdRef.current) {
+            return;
+          }
+
+          setIsCalculatingRoute(false);
+
+          if (res && res.status === "SUCCESS" && res.coordinates && res.coordinates.length >= 2) {
             setRouteResult(res);
-            setIsCalculatingRoute(false);
-            if (res.status === "SUCCESS" && res.coordinates.length >= 2) {
-              const profile = buildRouteGeometryProfile(res.coordinates);
-              setRouteProfile(profile);
-              setSimDistanceMeters(0);
-              setSimStatus('IDLE');
-            } else {
-              setRouteProfile(null);
-              setSimDistanceMeters(0);
-              setSimStatus('IDLE');
+            const profile = buildRouteGeometryProfile(res.coordinates);
+            setRouteProfile(profile);
+            setSimDistanceMeters(0);
+            setSimStatus('IDLE');
+          } else {
+            // Failure or no feasible water path: clear route polyline, record failure reason for HUD
+            setRouteResult(res || null);
+            setRouteProfile(null);
+            setSimDistanceMeters(0);
+            setSimStatus('IDLE');
+            if (res?.failingReason) {
+              showToast(`No valid maritime route found (${res.failingReason})`);
             }
           }
         })
         .catch((err) => {
-          if (!cancelled) {
-            console.error("Routing error:", err);
-            setIsCalculatingRoute(false);
-            setRouteResult(null);
-            setRouteProfile(null);
-            setSimDistanceMeters(0);
-            setSimStatus('IDLE');
+          // Drop response if component unmounted or if a newer calculation request was initiated
+          if (cancelled || currentRequestId !== routeRequestIdRef.current) {
+            return;
           }
+
+          console.error("Maritime routing calculation error:", err);
+          setIsCalculatingRoute(false);
+          setRouteResult(null);
+          setRouteProfile(null);
+          setSimDistanceMeters(0);
+          setSimStatus('IDLE');
+          showToast("Maritime routing failed: calculation error");
         });
     } else {
-      setRouteResult(null);
       setIsCalculatingRoute(false);
-      setHazardReport(null);
-      setIsAnalyzingHazards(false);
-      setRouteProfile(null);
-      setSimDistanceMeters(0);
-      setSimStatus('IDLE');
     }
 
     return () => {
@@ -333,6 +353,11 @@ export const AntarcticOverview: FC = () => {
     let lastTimestamp = performance.now();
 
     const frame = (now: number) => {
+      // Throttle simulation frame ticks to ~33 FPS to keep main thread snappy
+      if (now - lastTimestamp < 30) {
+        animId = requestAnimationFrame(frame);
+        return;
+      }
       const dtSeconds = Math.max(0, (now - lastTimestamp) / 1000.0);
       lastTimestamp = now;
 
@@ -360,39 +385,44 @@ export const AntarcticOverview: FC = () => {
   }, [simStatus, routeProfile, simSpeedMultiplier]);
 
   // Evaluate current vessel simulation point along the route
-  const vesselPoint: RouteSimulationPoint = routeProfile
-    ? evaluateSimulationPoint(routeProfile, simDistanceMeters)
-    : departurePort
-    ? {
-        coordinate: [departurePort.longitude, departurePort.latitude],
-        headingDegrees: 0,
-        segmentIndex: 0,
-        distanceTraveledMeters: 0,
-        distanceRemainingMeters: 0,
-        totalDistanceMeters: 0,
-        progressPercent: 0,
-        isCompleted: false,
-      }
-    : {
-        coordinate: [
-          DEMO_VESSEL_CONFIG.geographicLocation.longitude,
-          DEMO_VESSEL_CONFIG.geographicLocation.latitude,
-        ],
-        headingDegrees: 55.0,
-        segmentIndex: 0,
-        distanceTraveledMeters: 0,
-        distanceRemainingMeters: 0,
-        totalDistanceMeters: 0,
-        progressPercent: 0,
-        isCompleted: false,
-      };
+  const vesselPoint: RouteSimulationPoint = useMemo(() => {
+    return routeProfile
+      ? evaluateSimulationPoint(routeProfile, simDistanceMeters)
+      : departurePort
+      ? {
+          coordinate: [departurePort.longitude, departurePort.latitude],
+          headingDegrees: 0,
+          segmentIndex: 0,
+          distanceTraveledMeters: 0,
+          distanceRemainingMeters: 0,
+          totalDistanceMeters: 0,
+          progressPercent: 0,
+          isCompleted: false,
+        }
+      : {
+          coordinate: [
+            DEMO_VESSEL_CONFIG.geographicLocation.longitude,
+            DEMO_VESSEL_CONFIG.geographicLocation.latitude,
+          ],
+          headingDegrees: 55.0,
+          segmentIndex: 0,
+          distanceTraveledMeters: 0,
+          distanceRemainingMeters: 0,
+          totalDistanceMeters: 0,
+          progressPercent: 0,
+          isCompleted: false,
+        };
+  }, [routeProfile, simDistanceMeters, departurePort]);
 
-  const currentVesselLocation = {
-    latitude: vesselPoint.coordinate[1],
-    longitude: vesselPoint.coordinate[0],
-    altitude: 0,
-    headingDegrees: vesselPoint.headingDegrees,
-  };
+  const currentVesselLocation = useMemo(
+    () => ({
+      latitude: vesselPoint.coordinate[1],
+      longitude: vesselPoint.coordinate[0],
+      altitude: 0,
+      headingDegrees: vesselPoint.headingDegrees,
+    }),
+    [vesselPoint.coordinate[0], vesselPoint.coordinate[1], vesselPoint.headingDegrees]
+  );
 
   // Perform rigorous spatial hazard analysis against real iceberg datasets when valid route exists
   useEffect(() => {
@@ -485,40 +515,40 @@ export const AntarcticOverview: FC = () => {
     };
   }, []);
 
-  const handleResetCamera = () => {
+  const handleResetCamera = useCallback(() => {
     globeRef.current?.resetCamera();
-  };
+  }, []);
 
-  const handleFocusDeparture = () => {
+  const handleFocusDeparture = useCallback(() => {
     if (departurePort) {
       setSelectedPort(departurePort);
       globeRef.current?.flyToPort(departurePort);
     }
-  };
+  }, [departurePort]);
 
-  const handleFocusDestination = () => {
+  const handleFocusDestination = useCallback(() => {
     if (destinationPort) {
       setSelectedPort(destinationPort);
       globeRef.current?.flyToPort(destinationPort);
     }
-  };
+  }, [destinationPort]);
 
-  const handleFocusRoute = () => {
+  const handleFocusRoute = useCallback(() => {
     if (routeResult && routeResult.coordinates.length >= 2) {
       globeRef.current?.flyToRoute(routeResult.coordinates);
     }
-  };
+  }, [routeResult]);
 
-  const handleFocusHazard = (hazard: IcebergHazardItem) => {
+  const handleFocusHazard = useCallback((hazard: IcebergHazardItem) => {
     globeRef.current?.flyToHazard(hazard);
     showToast(`Focused hazard: Iceberg ${hazard.icebergId} (${hazard.relationship})`);
-  };
+  }, [showToast]);
 
-  const handleFocusVessel = () => {
+  const handleFocusVessel = useCallback(() => {
     globeRef.current?.flyToVessel();
-  };
+  }, []);
 
-  const handleOpenTacticalView = () => {
+  const handleOpenTacticalView = useCallback(() => {
     if (!routeResult || routeResult.status !== 'SUCCESS') {
       showToast("Calculate a valid maritime route first to open 2D Tactical View");
       return;
@@ -526,39 +556,62 @@ export const AntarcticOverview: FC = () => {
     setActiveView('2D_TACTICAL');
     updateUrlParams('2D_TACTICAL', layerFilter);
     showToast("Switched to 2D Tactical Navigation View");
-  };
+  }, [routeResult, layerFilter, showToast, updateUrlParams]);
 
-  const handleBackToGlobe = () => {
+  const handleBackToGlobe = useCallback(() => {
     setActiveView('3D_GLOBE');
     updateUrlParams('3D_GLOBE', layerFilter);
     showToast("Returned to 3D Global Overview");
-  };
+  }, [layerFilter, showToast, updateUrlParams]);
 
-  const handlePlaySim = () => {
+  const handlePlaySim = useCallback(() => {
     if (!routeProfile) return;
-    if (simStatus === 'COMPLETED' || simDistanceMeters >= routeProfile.totalDistanceMeters) {
-      setSimDistanceMeters(0);
-    }
+    setSimDistanceMeters((cur) => {
+      if (simStatus === 'COMPLETED' || cur >= routeProfile.totalDistanceMeters) {
+        return 0;
+      }
+      return cur;
+    });
     setSimStatus('PLAYING');
-  };
+  }, [routeProfile, simStatus]);
 
-  const handlePauseSim = () => {
+  const handlePauseSim = useCallback(() => {
     setSimStatus('PAUSED');
-  };
+  }, []);
 
-  const handleResetSim = () => {
+  const handleResetSim = useCallback(() => {
     setSimDistanceMeters(0);
     setSimStatus('IDLE');
-  };
+  }, []);
 
-  const handleSeekDistance = (distMeters: number) => {
+  const handleSeekDistance = useCallback((distMeters: number) => {
     if (!routeProfile) return;
     const clamped = Math.max(0, Math.min(routeProfile.totalDistanceMeters, distMeters));
     setSimDistanceMeters(clamped);
     if (clamped >= routeProfile.totalDistanceMeters) {
       setSimStatus('COMPLETED');
     }
-  };
+  }, [routeProfile]);
+
+  const handleSetSelectedPortDeparture = useCallback(() => {
+    if (selectedPort) handleSetDeparture(selectedPort);
+  }, [selectedPort, handleSetDeparture]);
+
+  const handleSetSelectedPortDestination = useCallback(() => {
+    if (selectedPort) handleSetDestination(selectedPort);
+  }, [selectedPort, handleSetDestination]);
+
+  const handleCloseSelectedPort = useCallback(() => {
+    setSelectedPort(null);
+  }, []);
+
+  const handleCloseSelectedVessel = useCallback(() => {
+    setSelectedVessel(null);
+  }, []);
+
+  const handleCloseSelectedDriftingIceberg = useCallback(() => {
+    setSelectedDriftingIceberg(null);
+  }, []);
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-polar-950">
@@ -590,6 +643,9 @@ export const AntarcticOverview: FC = () => {
       {/* ──────────── 3D GLOBE VIEW ──────────── */}
       {activeView === '3D_GLOBE' && (
         <>
+          {/* Mission Operational Header HUD (Top Left Visual Anchor) */}
+          <Header />
+
           <CesiumGlobe
             ref={globeRef}
             className="w-full h-full"
@@ -615,6 +671,7 @@ export const AntarcticOverview: FC = () => {
             vesselLocation={currentVesselLocation}
             onOpenTacticalView={handleOpenTacticalView}
             layerFilter={layerFilter}
+            maritimeRoute={routeResult}
           />
 
           {/* Layer Filter / Isolation & Highlight Toggle (Top Right) */}
@@ -649,7 +706,7 @@ export const AntarcticOverview: FC = () => {
             <VesselInfoCard
               vessel={selectedVessel}
               screenPosition={vesselScreenPos}
-              onClose={() => setSelectedVessel(null)}
+              onClose={handleCloseSelectedVessel}
               onOpenTacticalView={handleOpenTacticalView}
             />
           )}
@@ -660,12 +717,12 @@ export const AntarcticOverview: FC = () => {
               port={selectedPort}
               screenPosition={portScreenPos}
               isDeparture={departurePort?.wpiNumber === selectedPort.wpiNumber}
-              onSetDeparture={() => handleSetDeparture(selectedPort)}
+              onSetDeparture={handleSetSelectedPortDeparture}
               onClearDeparture={handleClearDeparture}
               isDestination={destinationPort?.wpiNumber === selectedPort.wpiNumber}
-              onSetDestination={() => handleSetDestination(selectedPort)}
+              onSetDestination={handleSetSelectedPortDestination}
               onClearDestination={handleClearDestination}
-              onClose={() => setSelectedPort(null)}
+              onClose={handleCloseSelectedPort}
             />
           )}
 
@@ -674,7 +731,7 @@ export const AntarcticOverview: FC = () => {
             <DriftingIcebergAnnotation
               iceberg={selectedDriftingIceberg}
               screenPosition={driftingIcebergScreenPos}
-              onClose={() => setSelectedDriftingIceberg(null)}
+              onClose={handleCloseSelectedDriftingIceberg}
             />
           )}
 

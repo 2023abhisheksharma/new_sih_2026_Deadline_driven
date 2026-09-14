@@ -1,0 +1,25 @@
+{
+  "phase": "PHASE_8_FINAL_ANDSS_INTEGRATION",
+  "timestamp": "2026-09-10T19:25:46.668Z",
+  "gitProvenance": {
+    "branch": "phase8-final-integration",
+    "author": "Antarctic DSS Engine Architecture Team"
+  },
+  "upstreamDependencies": {
+    "phase1": "Single Source of Truth (AntarcticOverview.tsx)",
+    "phase2": "Eurostat MARNET 20km Mesh Geometry",
+    "phase3": "Adaptive Port Snapping & Authoritative Land Gate",
+    "phase4": "Polar Graph Connectivity (17,688 nodes, 4 components)",
+    "phase5": "Empirical Transition Gateways (-35°S corridor, 233 gateways)",
+    "phase6": "Hybrid Polar-Global Route Construction with Hard Validation Gate",
+    "phase7": "Terminal Harbor Approaches & Route Quality Model"
+  },
+  "phase8Innovations": {
+    "singleAuthoritativeOwner": "Unified dispatch flow between AntarcticOverview, CesiumGlobe, Tactical2DView, and RouteSummaryPanel",
+    "unifiedRouteStateModel": "Strict operational distinction between VALID ROUTE, ROUTE CONSTRUCTED BUT REJECTED, and ROUTE UNAVAILABLE",
+    "preservedFailureTaxonomy": "Surfaces Internal MARNET topology defect (Mumbai), Terminal approach limit (Sydney), and Patagonian isolated fjord without data loss",
+    "semanticIcebergCategorization": "Rigorous separation of USNIC observed large icebergs, BYU/NIC historical drift tracks, and Sentinel-1 SAR grounded targets",
+    "assumedSpeedDurationStandard": "Explicitly labels transit time as estimated duration at assumed 15 kn, preventing fake operational ETA confusion"
+  },
+  "determinismStatus": "BIT_IDENTICAL_VERIFIED"
+}

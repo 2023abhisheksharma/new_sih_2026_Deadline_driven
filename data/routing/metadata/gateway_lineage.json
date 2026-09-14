@@ -1,0 +1,24 @@
+{
+  "phase": "PHASE 5 — EMPIRICAL GATEWAY DISCOVERY & BOUNDARY BENCHMARKING",
+  "timestamp": "2026-09-10T19:52:54.386Z",
+  "sourceGraph": {
+    "file": "frontend/public/data/polarWaterGraph.json",
+    "nodeCount": 17688,
+    "edgeCount": 577202,
+    "componentCount": 4
+  },
+  "globalNetwork": {
+    "source": "searoute-ts/marnet-20km (Eurostat MARNET)",
+    "uniqueVertices": 16219
+  },
+  "boundaryRecommendation": {
+    "optimalBoundaryParallelDeg": -35,
+    "rationale": "Lowest median transition gap (55.6 km), highest MARNET vertex density (99 vertices), full 7/7 circumpolar sector coverage, natural oceanic hand-off latitude south of South Africa and Australia."
+  },
+  "reproducibility": {
+    "algorithm": "Deterministic spatial-hash matching + water line-of-sight ray-casting against southernLandRings.json",
+    "scoringFormula": "Q = 0.40*S_dist + 0.30*S_clear + 0.15*S_deg + 0.15*S_align",
+    "hardcodedCoordinates": false,
+    "syntheticEdges": false
+  }
+}

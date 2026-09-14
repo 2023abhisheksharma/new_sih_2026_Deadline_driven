@@ -1,0 +1,16 @@
+{
+  "phase": "PHASE 6 — HYBRID POLAR <-> GLOBAL ROUTING ENGINE",
+  "timestamp": "2026-09-10T12:29:45.315Z",
+  "sourceCatalog": "data/routing/processed/gateway_benchmark.json",
+  "sourceGraph": "frontend/public/data/polarWaterGraph.json",
+  "sourceNetwork": "searoute-ts/marnet-20km (Eurostat MARNET)",
+  "validationService": "frontend/src/services/routeValidationService.ts",
+  "hybridService": "frontend/src/services/hybridMaritimeRoutingService.ts",
+  "reproducibility": {
+    "script": "scripts/benchmark_hybrid_routes.mjs",
+    "algorithm": "Deterministic geodesic gateway pruning (K=18, sector-stratified) + TinyQueue Dijkstra + Eurostat MARNET LineString/MultiLineString flattening + Complete-route land validation",
+    "hardcodedCoordinates": false,
+    "syntheticEdges": false,
+    "determinismPass": true
+  }
+}

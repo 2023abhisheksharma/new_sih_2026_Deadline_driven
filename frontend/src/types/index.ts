@@ -11,7 +11,11 @@ export * from './iceberg';
 export * from './driftingIceberg';
 export * from './sentinel1Iceberg';
 export * from './iceHazard';
-export type { MaritimeRouteResult } from '../services/maritimeRoutingService';
+export type {
+  MaritimeRouteResult,
+  RouteOperationalStatus,
+  RouteFailureCategory,
+} from '../services/maritimeRoutingService';
 export type {
   RouteSimulationPoint,
   RouteGeometryProfile,

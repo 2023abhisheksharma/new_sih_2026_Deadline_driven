@@ -1,11 +1,11 @@
-import type { FC } from 'react';
+import { memo, type FC } from 'react';
 
 /**
  * Mission Header HUD
  * ------------------
  * Minimalist top-left HUD banner displaying DSS title and live target inventory metrics.
  */
-export const Header: FC = () => {
+export const Header: FC = memo(() => {
   return (
     <header className="absolute top-5 left-6 z-20 pointer-events-none select-none font-sans">
       <h1 className="text-xs font-semibold tracking-wider text-slate-200 uppercase font-sans">
@@ -32,4 +32,6 @@ export const Header: FC = () => {
       </div>
     </header>
   );
-};
+});
+
+Header.displayName = 'Header';

@@ -153,6 +153,92 @@ export function calculateBearingDegrees(
   return (brng + 360.0) % 360.0;
 }
 
+export const calculateBearingDeg = calculateBearingDegrees;
+
+/**
+ * Computes destination geographic coordinate given an origin [lon, lat],
+ * distance in kilometers, and initial forward azimuth (bearing) in degrees.
+ *
+ * @param origin [lon, lat] origin point in degrees
+ * @param distanceKm Distance to travel in kilometers
+ * @param bearingDeg Clockwise bearing from true North in degrees [0, 360)
+ * @returns [lon, lat] destination coordinate in degrees
+ */
+export function calculateDestinationPoint(
+  origin: [number, number],
+  distanceKm: number,
+  bearingDeg: number
+): [number, number] {
+  const d = (distanceKm * 1000.0) / EARTH_RADIUS_METERS;
+  const brng = toRad(bearingDeg);
+  const lat1 = toRad(origin[1]);
+  const lon1 = toRad(origin[0]);
+
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
+  );
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+    );
+
+  return [toDeg(lon2), toDeg(lat2)];
+}
+
+/**
+ * Spherical Linear Interpolation (Slerp) between two geographic coordinates [lon, lat].
+ * Accurately tracks the true 3D great-circle arc across the WGS84 sphere.
+ *
+ * @param p1 Starting coordinate [lon, lat] in degrees
+ * @param p2 Ending coordinate [lon, lat] in degrees
+ * @param t Normalized interpolation factor in [0, 1]
+ * @returns Interpolated coordinate [lon, lat] in degrees
+ */
+export function slerpCoordinates(
+  p1: [number, number],
+  p2: [number, number],
+  t: number
+): [number, number] {
+  if (t <= 0) return p1;
+  if (t >= 1) return p2;
+
+  const phi1 = toRad(p1[1]);
+  const lambda1 = toRad(p1[0]);
+  const v1: Vector3 = [
+    Math.cos(phi1) * Math.cos(lambda1),
+    Math.cos(phi1) * Math.sin(lambda1),
+    Math.sin(phi1),
+  ];
+
+  const phi2 = toRad(p2[1]);
+  const lambda2 = toRad(p2[0]);
+  const v2: Vector3 = [
+    Math.cos(phi2) * Math.cos(lambda2),
+    Math.cos(phi2) * Math.sin(lambda2),
+    Math.sin(phi2),
+  ];
+
+  let dotProduct = v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
+  dotProduct = Math.max(-1.0, Math.min(1.0, dotProduct));
+  const omega = Math.acos(dotProduct);
+  if (Math.abs(omega) < 1e-6) return p1;
+
+  const sinOmega = Math.sin(omega);
+  const s1 = Math.sin((1 - t) * omega) / sinOmega;
+  const s2 = Math.sin(t * omega) / sinOmega;
+  const v: Vector3 = [
+    s1 * v1[0] + s2 * v2[0],
+    s1 * v1[1] + s2 * v2[1],
+    s1 * v1[2] + s2 * v2[2],
+  ];
+
+  const lat = toDeg(Math.asin(Math.max(-1.0, Math.min(1.0, v[2]))));
+  const lon = toDeg(Math.atan2(v[1], v[0]));
+  return [lon, lat];
+}
+
 // ============================================================================
 // 3. 3D Spherical Vector Projection (Point-to-Segment Minimum Geodesic Distance)
 // ============================================================================
@@ -288,6 +374,100 @@ export function segmentsIntersect(
 }
 
 /**
+ * Exact 3D Spherical Arc Intersection
+ * -----------------------------------
+ * Tests whether two great-circle segments [p1 -> p2] and [p3 -> p4] intersect on the WGS84 sphere.
+ * Operates directly on unit 3D Cartesian vectors in ECEF space, completely immune to
+ * equirectangular projection distortion, polar singularities, and antimeridian seams.
+ */
+export function sphericalSegmentsIntersect(
+  p1: [number, number],
+  p2: [number, number],
+  p3: [number, number],
+  p4: [number, number]
+): boolean {
+  const vA = toCartesianUnit(p1[0], p1[1]);
+  const vB = toCartesianUnit(p2[0], p2[1]);
+  const vC = toCartesianUnit(p3[0], p3[1]);
+  const vD = toCartesianUnit(p4[0], p4[1]);
+
+  const nAB = cross(vA, vB);
+  const nCD = cross(vC, vD);
+  const lenAB = norm(nAB);
+  const lenCD = norm(nCD);
+  if (lenAB < 1e-12 || lenCD < 1e-12) return false;
+
+  const L = cross(nAB, nCD);
+  const lenL = norm(L);
+  if (lenL < 1e-12) return false; // Coplanar or collinear
+
+  const pInt1: Vector3 = [L[0] / lenL, L[1] / lenL, L[2] / lenL];
+  const pInt2: Vector3 = [-pInt1[0], -pInt1[1], -pInt1[2]];
+
+  function onArc(P: Vector3, A: Vector3, B: Vector3, n: Vector3): boolean {
+    if (dot(P, [A[0] + B[0], A[1] + B[1], A[2] + B[2]]) <= 0) return false;
+    const c1 = dot(cross(A, P), n);
+    const c2 = dot(cross(P, B), n);
+    return c1 >= -1e-9 && c2 >= -1e-9;
+  }
+
+  return (
+    (onArc(pInt1, vA, vB, nAB) && onArc(pInt1, vC, vD, nCD)) ||
+    (onArc(pInt2, vA, vB, nAB) && onArc(pInt2, vC, vD, nCD))
+  );
+}
+
+/**
+ * Computes the normalized intersection parameter t in [0, 1] along segment [p1 -> p2]
+ * where it intersects segment [p3 -> p4] on the sphere, or null if no intersection occurs.
+ */
+export function computeSphericalIntersectionParam(
+  p1: [number, number],
+  p2: [number, number],
+  p3: [number, number],
+  p4: [number, number]
+): number | null {
+  const vA = toCartesianUnit(p1[0], p1[1]);
+  const vB = toCartesianUnit(p2[0], p2[1]);
+  const vC = toCartesianUnit(p3[0], p3[1]);
+  const vD = toCartesianUnit(p4[0], p4[1]);
+
+  const nAB = cross(vA, vB);
+  const nCD = cross(vC, vD);
+  const lenAB = norm(nAB);
+  const lenCD = norm(nCD);
+  if (lenAB < 1e-12 || lenCD < 1e-12) return null;
+
+  const L = cross(nAB, nCD);
+  const lenL = norm(L);
+  if (lenL < 1e-12) return null;
+
+  const pInt1: Vector3 = [L[0] / lenL, L[1] / lenL, L[2] / lenL];
+  const pInt2: Vector3 = [-pInt1[0], -pInt1[1], -pInt1[2]];
+
+  function onArc(P: Vector3, A: Vector3, B: Vector3, n: Vector3): boolean {
+    if (dot(P, [A[0] + B[0], A[1] + B[1], A[2] + B[2]]) <= 0) return false;
+    const c1 = dot(cross(A, P), n);
+    const c2 = dot(cross(P, B), n);
+    return c1 >= -1e-9 && c2 >= -1e-9;
+  }
+
+  let hitP: Vector3 | null = null;
+  if (onArc(pInt1, vA, vB, nAB) && onArc(pInt1, vC, vD, nCD)) {
+    hitP = pInt1;
+  } else if (onArc(pInt2, vA, vB, nAB) && onArc(pInt2, vC, vD, nCD)) {
+    hitP = pInt2;
+  }
+
+  if (!hitP) return null;
+
+  const angleTotal = Math.acos(Math.max(-1.0, Math.min(1.0, dot(vA, vB))));
+  if (angleTotal < 1e-9) return 0;
+  const angleHit = Math.acos(Math.max(-1.0, Math.min(1.0, dot(vA, hitP))));
+  return Math.max(0, Math.min(1, angleHit / angleTotal));
+}
+
+/**
  * Standard Ray-Casting algorithm to test whether a coordinate point [lon, lat]
  * is strictly inside a closed polygon ring [[lon, lat], ...].
  */
@@ -320,3 +500,216 @@ export function pointInPolygon(
   }
   return inside;
 }
+
+export interface SpatialEdgeItem {
+  p1: [number, number];
+  p2: [number, number];
+  ringIndex: number;
+}
+
+/**
+ * High-performance 2D Spatial Edge Grid Index.
+ * Partitions polygon boundary edges into uniform geographic cells for sub-millisecond
+ * spatial querying, accelerating segment-polygon intersection and clearance checking by >1000x.
+ */
+export class SpatialEdgeGrid {
+  private readonly cellSize: number;
+  private readonly grid: Map<string, SpatialEdgeItem[]> = new Map();
+
+  constructor(rings: { ring: [number, number][] }[], cellSize: number = 2.0) {
+    this.cellSize = cellSize;
+    for (let r = 0; r < rings.length; r++) {
+      const ring = rings[r].ring;
+      for (let j = 0; j < ring.length - 1; j++) {
+        const p1 = ring[j];
+        const p2 = ring[j + 1];
+        const minX = Math.min(p1[0], p2[0]);
+        const maxX = Math.max(p1[0], p2[0]);
+        const minY = Math.min(p1[1], p2[1]);
+        const maxY = Math.max(p1[1], p2[1]);
+        const minCellX = Math.floor(minX / cellSize);
+        const maxCellX = Math.floor(maxX / cellSize);
+        const minCellY = Math.floor(minY / cellSize);
+        const maxCellY = Math.floor(maxY / cellSize);
+
+        const item: SpatialEdgeItem = { p1, p2, ringIndex: r };
+        for (let cx = minCellX; cx <= maxCellX; cx++) {
+          for (let cy = minCellY; cy <= maxCellY; cy++) {
+            const key = `${cx},${cy}`;
+            let cell = this.grid.get(key);
+            if (!cell) {
+              cell = [];
+              this.grid.set(key, cell);
+            }
+            cell.push(item);
+          }
+        }
+      }
+    }
+  }
+
+  queryCandidateEdges(minLon: number, minLat: number, maxLon: number, maxLat: number): SpatialEdgeItem[] {
+    const minCX = Math.floor(minLon / this.cellSize);
+    const maxCX = Math.floor(maxLon / this.cellSize);
+    const minCY = Math.floor(minLat / this.cellSize);
+    const maxCY = Math.floor(maxLat / this.cellSize);
+    const candidates: SpatialEdgeItem[] = [];
+    for (let cx = minCX; cx <= maxCX; cx++) {
+      for (let cy = minCY; cy <= maxCY; cy++) {
+        const cell = this.grid.get(`${cx},${cy}`);
+        if (cell) {
+          for (let i = 0; i < cell.length; i++) candidates.push(cell[i]);
+        }
+      }
+    }
+    return candidates;
+  }
+}
+
+// ============================================================================
+// 5. High-Performance 2D Spatial Hash Grid Index
+// ============================================================================
+
+/**
+ * Lightweight 2D spatial hash grid index for sub-millisecond bounding box queries.
+ * Optimizes proximity searches over dense datasets (such as 39,619 Sentinel-1 targets
+ * and 3,807 global ports), reducing per-frame query complexity from O(N) to O(1)
+ * cell bucket lookups for sustained 60 FPS performance.
+ */
+export class SpatialGridIndex<T> {
+  private readonly cellSize: number;
+  private readonly grid: Map<string, T[]> = new Map();
+
+  constructor(
+    items: readonly T[],
+    getCoords: (item: T) => [number, number] | null | undefined,
+    cellSize: number = 2.0
+  ) {
+    this.cellSize = cellSize;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const coords = getCoords(item);
+      if (!coords) continue;
+      const [lon, lat] = coords;
+      const cellX = Math.floor(lon / cellSize);
+      const cellY = Math.floor(lat / cellSize);
+      const key = `${cellX},${cellY}`;
+      let cell = this.grid.get(key);
+      if (!cell) {
+        cell = [];
+        this.grid.set(key, cell);
+      }
+      cell.push(item);
+    }
+  }
+
+  /**
+   * Queries all candidate items residing within or overlapping the specified bounding box.
+   *
+   * @param minLon Western boundary in degrees
+   * @param minLat Southern boundary in degrees
+   * @param maxLon Eastern boundary in degrees
+   * @param maxLat Northern boundary in degrees
+   * @returns Array of candidate items in matched grid cells
+   */
+  queryBoundingBox(
+    minLon: number,
+    minLat: number,
+    maxLon: number,
+    maxLat: number
+  ): T[] {
+    const minX = Math.floor(minLon / this.cellSize);
+    const maxX = Math.floor(maxLon / this.cellSize);
+    const minY = Math.floor(minLat / this.cellSize);
+    const maxY = Math.floor(maxLat / this.cellSize);
+
+    const results: T[] = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const key = `${x},${y}`;
+        const cell = this.grid.get(key);
+        if (cell) {
+          for (let i = 0; i < cell.length; i++) {
+            results.push(cell[i]);
+          }
+        }
+      }
+    }
+    return results;
+  }
+}
+
+// ============================================================================
+// 6. High-Performance 2D Spatial Polygon Ring Grid Index
+// ============================================================================
+
+/**
+ * 2D spatial hash grid index for polygon bounding boxes.
+ * Accelerates point-in-polygon containment tests and viewport polygon culling
+ * by mapping 2,000+ land boundary rings into uniform spatial buckets.
+ * Reduces per-query polygon candidates from 2,195 to ~1-4.
+ */
+export class SpatialPolygonGrid<T extends { bbox: [number, number, number, number] }> {
+  private readonly cellSize: number;
+  private readonly grid: Map<string, T[]> = new Map();
+
+  constructor(rings: readonly T[], cellSize: number = 4.0) {
+    this.cellSize = cellSize;
+    for (let r = 0; r < rings.length; r++) {
+      const ringObj = rings[r];
+      const [minLon, minLat, maxLon, maxLat] = ringObj.bbox;
+      const minCX = Math.floor(minLon / cellSize);
+      const maxCX = Math.floor(maxLon / cellSize);
+      const minCY = Math.floor(minLat / cellSize);
+      const maxCY = Math.floor(maxLat / cellSize);
+      for (let cx = minCX; cx <= maxCX; cx++) {
+        for (let cy = minCY; cy <= maxCY; cy++) {
+          const key = `${cx},${cy}`;
+          let cell = this.grid.get(key);
+          if (!cell) {
+            cell = [];
+            this.grid.set(key, cell);
+          }
+          cell.push(ringObj);
+        }
+      }
+    }
+  }
+
+  /**
+   * Retrieves all candidate polygon rings whose bounding boxes overlap the cell containing (lon, lat).
+   */
+  queryPointCandidates(lon: number, lat: number): T[] {
+    const cx = Math.floor(lon / this.cellSize);
+    const cy = Math.floor(lat / this.cellSize);
+    return this.grid.get(`${cx},${cy}`) || [];
+  }
+
+  /**
+   * Retrieves all unique candidate polygon rings overlapping the specified geographic bounding box.
+   */
+  queryBoundingBoxCandidates(
+    minLon: number,
+    minLat: number,
+    maxLon: number,
+    maxLat: number
+  ): T[] {
+    const minCX = Math.floor(minLon / this.cellSize);
+    const maxCX = Math.floor(maxLon / this.cellSize);
+    const minCY = Math.floor(minLat / this.cellSize);
+    const maxCY = Math.floor(maxLat / this.cellSize);
+    const resultSet = new Set<T>();
+    for (let cx = minCX; cx <= maxCX; cx++) {
+      for (let cy = minCY; cy <= maxCY; cy++) {
+        const cell = this.grid.get(`${cx},${cy}`);
+        if (cell) {
+          for (let i = 0; i < cell.length; i++) {
+            resultSet.add(cell[i]);
+          }
+        }
+      }
+    }
+    return Array.from(resultSet);
+  }
+}
+

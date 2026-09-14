@@ -17,7 +17,7 @@
  *    Unified screen-space picking with layer priority filtering and debounced hover tooltips.
  */
 
-import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef, memo } from 'react';
 import * as Cesium from 'cesium';
 import { DEMO_VESSEL_CONFIG, VesselConfiguration } from '../../config/vessel';
 import type {
@@ -28,8 +28,8 @@ import type {
   IceHazardAnalysisReport,
   IcebergHazardItem,
   LayerFilterMode,
+  MaritimeRouteResult,
 } from '../../types';
-import { computeMaritimeRoute } from '../../services/maritimeRoutingService';
 
 export interface CesiumGlobeRef {
   resetCamera: () => void;
@@ -64,7 +64,11 @@ export interface CesiumGlobeProps {
   vesselLocation?: { latitude: number; longitude: number; altitude?: number; headingDegrees?: number } | null;
   onOpenTacticalView?: () => void;
   layerFilter?: LayerFilterMode;
+  maritimeRoute?: MaritimeRouteResult | null;
 }
+
+// Reusable single instance of EllipsoidalOccluder to avoid garbage collection churn
+let cachedOccluder: any = null;
 
 /**
  * Accurately computes the 2D canvas screen coordinate for a 3D Cartesian geographic position.
@@ -89,8 +93,12 @@ function computeVisibleScreenCoord(
   }
 
   // 2. Horizon Occlusion Check: Point must not be occluded by the curved Earth ellipsoid
-  const occluder = new (Cesium as any).EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, cameraPos);
-  if (!occluder.isPointVisible(cartesian)) {
+  if (!cachedOccluder) {
+    cachedOccluder = new (Cesium as any).EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, cameraPos);
+  } else {
+    cachedOccluder.cameraPosition = cameraPos;
+  }
+  if (!cachedOccluder.isPointVisible(cartesian)) {
     return null;
   }
 
@@ -124,7 +132,8 @@ const DEFAULT_CAMERA_VIEW = {
   },
 };
 
-export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
+export const CesiumGlobe = memo(
+  forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
   (
     {
       className = '',
@@ -150,6 +159,7 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
       vesselLocation,
       onOpenTacticalView,
       layerFilter = 'ALL',
+      maritimeRoute = null,
     },
     ref
   ) => {
@@ -494,7 +504,7 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
       ) => {
         if (!prev && !next) return false;
         if (!prev || !next) return true;
-        return Math.abs(prev.x - next.x) > 0.5 || Math.abs(prev.y - next.y) > 0.5;
+        return Math.abs(prev.x - next.x) > 3.0 || Math.abs(prev.y - next.y) > 3.0;
       };
 
       // Continuously synchronize vessel, port, departure, destination & drifting screen coordinates with 3D horizon occlusion
@@ -582,9 +592,19 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
         }
       };
 
-      const removePostRender = viewer.scene.postRender.addEventListener(updateScreenPos);
-      const removeCameraChanged = viewer.camera.changed.addEventListener(updateScreenPos);
-      const removeCameraMoveEnd = viewer.camera.moveEnd.addEventListener(updateScreenPos);
+      // Throttle screen position calculations to 1 execution per animation frame
+      let rafId: number | null = null;
+      const scheduledUpdateScreenPos = () => {
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          updateScreenPos();
+        });
+      };
+
+      const removePostRender = viewer.scene.postRender.addEventListener(scheduledUpdateScreenPos);
+      const removeCameraChanged = viewer.camera.changed.addEventListener(scheduledUpdateScreenPos);
+      const removeCameraMoveEnd = viewer.camera.moveEnd.addEventListener(scheduledUpdateScreenPos);
 
       viewer.scene.requestRender();
 
@@ -597,6 +617,10 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
       viewerRef.current = viewer;
 
       return () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         removePostRender();
         if (removeCameraChanged) removeCameraChanged();
         if (removeCameraMoveEnd) removeCameraMoveEnd();
@@ -609,29 +633,48 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
     }, []);
 
     // Sync vessel geographic position when vesselLocation changes (e.g. at departure port or during simulation)
+    const lastVesselPosRef = useRef<{ lat: number; lon: number; alt: number } | null>(null);
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || viewer.isDestroyed()) return;
 
       const loc = vesselLocation || DEMO_VESSEL_CONFIG.geographicLocation;
-      const vPos = Cesium.Cartesian3.fromDegrees(
-        loc.longitude,
-        loc.latitude,
-        (loc as any).altitude || 0.0
-      );
+      const lat = loc.latitude;
+      const lon = loc.longitude;
+      const alt = (loc as any).altitude || 0.0;
+
+      if (
+        lastVesselPosRef.current &&
+        Math.abs(lastVesselPosRef.current.lat - lat) < 0.00001 &&
+        Math.abs(lastVesselPosRef.current.lon - lon) < 0.00001 &&
+        Math.abs(lastVesselPosRef.current.alt - alt) < 0.1
+      ) {
+        return;
+      }
+      lastVesselPosRef.current = { lat, lon, alt };
+
+      const vPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
 
       const vesselEntity = viewer.entities.getById('vessel-entity');
       if (vesselEntity) {
-        vesselEntity.position = new Cesium.ConstantPositionProperty(vPos);
+        if ((vesselEntity.position as any)?.setValue) {
+          (vesselEntity.position as any).setValue(vPos);
+        } else {
+          vesselEntity.position = new Cesium.ConstantPositionProperty(vPos);
+        }
       }
 
       const selectionRing = viewer.entities.getById('vessel-selection-ring');
       if (selectionRing) {
-        selectionRing.position = new Cesium.ConstantPositionProperty(vPos);
+        if ((selectionRing.position as any)?.setValue) {
+          (selectionRing.position as any).setValue(vPos);
+        } else {
+          selectionRing.position = new Cesium.ConstantPositionProperty(vPos);
+        }
       }
 
       viewer.scene.requestRender();
-    }, [vesselLocation]);
+    }, [vesselLocation?.latitude, vesselLocation?.longitude, (vesselLocation as any)?.altitude]);
 
     // Sync visual selection state with React prop changes
     useEffect(() => {
@@ -793,68 +836,56 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
       viewer.scene.requestRender();
     }, [destinationPort]);
 
-    // Sync Computed Maritime Route Polyline
+    // Sync Computed Maritime Route Polyline (Pure Renderer Driven by maritimeRoute Prop)
     useEffect(() => {
       const viewer = viewerRef.current;
       if (!viewer || viewer.isDestroyed()) return;
 
-      let cancelled = false;
-      let routeEntity = viewer.entities.getById('mission-maritime-route');
+      const routeEntity = viewer.entities.getById('mission-maritime-route');
 
-      if (departurePort && destinationPort) {
-        computeMaritimeRoute(departurePort, destinationPort).then((routeResult) => {
-          if (cancelled || !viewer || viewer.isDestroyed()) return;
+      // STRICT VALIDATION GATE: Only render if maritimeRoute is valid, status === 'SUCCESS', coordinates pass all tests
+      if (
+        maritimeRoute &&
+        maritimeRoute.status === 'SUCCESS' &&
+        (!maritimeRoute.validationReport || maritimeRoute.validationReport.overallResult === 'PASS') &&
+        maritimeRoute.coordinates &&
+        maritimeRoute.coordinates.length >= 2
+      ) {
+        const positions = maritimeRoute.coordinates.map(([lon, lat]) =>
+          Cesium.Cartesian3.fromDegrees(lon, lat, 1200)
+        );
 
-          routeEntity = viewer.entities.getById('mission-maritime-route');
-
-          // STRICT VALIDATION GATE: Only render if status === 'SUCCESS' and coordinates pass all tests
-          if (routeResult.status === 'SUCCESS' && routeResult.coordinates.length >= 2) {
-            const positions = routeResult.coordinates.map(([lon, lat]) =>
-              Cesium.Cartesian3.fromDegrees(lon, lat, 800)
-            );
-
-            if (!routeEntity) {
-              viewer.entities.add({
-                id: 'mission-maritime-route',
-                name: 'Computed Maritime Route',
-                polyline: {
-                  positions,
-                  width: 3.5,
-                  material: new Cesium.PolylineGlowMaterialProperty({
-                    glowPower: 0.25,
-                    taperPower: 1.0,
-                    color: Cesium.Color.fromCssColorString('#38bdf8'),
-                  }),
-                  arcType: Cesium.ArcType.NONE,
-                },
-              });
-            } else {
-              if (routeEntity.polyline) {
-                routeEntity.polyline.positions = new Cesium.ConstantProperty(positions);
-              }
-              routeEntity.show = true;
-            }
-          } else {
-            // REJECTED / INVALID: Never display an invalid route on the globe
-            if (routeEntity) {
-              routeEntity.show = false;
-            }
-            if (routeResult.failingReason) {
-              onInvalidClickRef.current?.(`No valid maritime route found (${routeResult.failingReason})`);
-            }
+        if (!routeEntity) {
+          viewer.entities.add({
+            id: 'mission-maritime-route',
+            name: 'Computed Maritime Route',
+            polyline: {
+              positions,
+              width: 3.5,
+              material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 0.25,
+                taperPower: 1.0,
+                color: Cesium.Color.fromCssColorString('#38bdf8'),
+              }),
+              arcType: Cesium.ArcType.NONE,
+            },
+          });
+        } else {
+          if (routeEntity.polyline) {
+            routeEntity.polyline.positions = new Cesium.ConstantProperty(positions);
+            routeEntity.polyline.arcType = new Cesium.ConstantProperty(Cesium.ArcType.NONE);
           }
-
-          viewer.scene.requestRender();
-        });
-      } else if (routeEntity) {
-        routeEntity.show = false;
-        viewer.scene.requestRender();
+          routeEntity.show = true;
+        }
+      } else {
+        // REJECTED / INVALID / NULL / PENDING: Immediately hide route from the globe
+        if (routeEntity) {
+          routeEntity.show = false;
+        }
       }
 
-      return () => {
-        cancelled = true;
-      };
-    }, [departurePort, destinationPort]);
+      viewer.scene.requestRender();
+    }, [maritimeRoute]);
 
     const portPointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null);
     const portLabelsRef = useRef<Cesium.LabelCollection | null>(null);
@@ -1301,6 +1332,22 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
       sentinel1PointsRef.current = pointCollection;
       sentinel1TacticalPolylinesRef.current = tacticalPolylines;
 
+      // Pre-bucket items with boundaries into 5-degree spatial grid for ultra-fast camera LOD queries
+      const spatialGrid = new Map<string, Sentinel1GroundedIcebergRecord[]>();
+      for (let i = 0; i < sentinel1Icebergs.length; i++) {
+        const berg = sentinel1Icebergs[i];
+        if (!berg.boundaryCoordinates || berg.boundaryCoordinates.length < 3) continue;
+        const latBin = Math.floor(berg.latitude / 5);
+        const lonBin = Math.floor(berg.longitude / 5);
+        const key = `${latBin}_${lonBin}`;
+        let bin = spatialGrid.get(key);
+        if (!bin) {
+          bin = [];
+          spatialGrid.set(key, bin);
+        }
+        bin.push(berg);
+      }
+
       // 2. Dynamic Viewport-Driven Tactical LOD for Polygon Boundaries
       const updateTacticalPolygons = () => {
         if (!viewer || viewer.isDestroyed()) return;
@@ -1340,14 +1387,46 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
           ? Cesium.Color.fromCssColorString('#fb7185')
           : Cesium.Color.fromCssColorString('#f87171').withAlpha(0.65);
 
-        const currentData = sentinel1DataRef.current;
+        const minLatBin = Math.floor(minLat / 5);
+        const maxLatBin = Math.floor(maxLat / 5);
+        const minLonBin = Math.floor(minLon / 5);
+        const maxLonBin = Math.floor(maxLon / 5);
+
+        const candidateBergs: Sentinel1GroundedIcebergRecord[] = [];
+        if (minLon <= maxLon) {
+          for (let latB = minLatBin; latB <= maxLatBin; latB++) {
+            for (let lonB = minLonBin; lonB <= maxLonBin; lonB++) {
+              const bin = spatialGrid.get(`${latB}_${lonB}`);
+              if (bin) {
+                for (let k = 0; k < bin.length; k++) candidateBergs.push(bin[k]);
+              }
+            }
+          }
+        } else {
+          // Antimeridian crossing
+          const maxEastBin = Math.floor(180 / 5);
+          const minWestBin = Math.floor(-180 / 5);
+          for (let latB = minLatBin; latB <= maxLatBin; latB++) {
+            for (let lonB = minLonBin; lonB <= maxEastBin; lonB++) {
+              const bin = spatialGrid.get(`${latB}_${lonB}`);
+              if (bin) {
+                for (let k = 0; k < bin.length; k++) candidateBergs.push(bin[k]);
+              }
+            }
+            for (let lonB = minWestBin; lonB <= maxLonBin; lonB++) {
+              const bin = spatialGrid.get(`${latB}_${lonB}`);
+              if (bin) {
+                for (let k = 0; k < bin.length; k++) candidateBergs.push(bin[k]);
+              }
+            }
+          }
+        }
+
         let renderedCount = 0;
         const MAX_TACTICAL_POLYGONS = isHighlight ? 2000 : 1200;
 
-        for (let i = 0; i < currentData.length; i++) {
-          const berg = currentData[i];
-          if (!berg.boundaryCoordinates || berg.boundaryCoordinates.length < 3) continue;
-
+        for (let i = 0; i < candidateBergs.length; i++) {
+          const berg = candidateBergs[i];
           let inView = false;
           if (minLon <= maxLon) {
             inView = berg.longitude >= minLon && berg.longitude <= maxLon &&
@@ -1690,6 +1769,7 @@ export const CesiumGlobe = forwardRef<CesiumGlobeRef, CesiumGlobeProps>(
       </div>
     );
   }
+)
 );
 
 CesiumGlobe.displayName = 'CesiumGlobe';

@@ -9,6 +9,8 @@
  * 2. Independent route validation against land barrier intersections.
  */
 
+import { SpatialPolygonGrid } from '../utils/geo';
+
 export interface LandPolygonRing {
   /** Geographic bounding box: [minLon, minLat, maxLon, maxLat] in degrees */
   bbox: [number, number, number, number];
@@ -56,6 +58,19 @@ export async function loadSouthernLandRings(): Promise<LandPolygonRing[]> {
   })();
 
   return landLoadingPromise;
+}
+
+let cachedPolygonGrid: SpatialPolygonGrid<LandPolygonRing> | null = null;
+let cachedGridRingsRef: LandPolygonRing[] | null = null;
+
+/**
+ * Returns or builds a cached SpatialPolygonGrid index for authoritative land barrier rings.
+ */
+export function getSpatialPolygonGrid(rings: LandPolygonRing[]): SpatialPolygonGrid<LandPolygonRing> {
+  if (cachedPolygonGrid && cachedGridRingsRef === rings) return cachedPolygonGrid;
+  cachedPolygonGrid = new SpatialPolygonGrid(rings, 4.0);
+  cachedGridRingsRef = rings;
+  return cachedPolygonGrid;
 }
 
 /** Legacy function alias for backwards compatibility */
