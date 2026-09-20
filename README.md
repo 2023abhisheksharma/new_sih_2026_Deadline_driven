@@ -1,10 +1,12 @@
-# 🧭 Antarctic Navigation System
+# 🧭 POLARIS-X
 
-### Hybrid Global + Polar Maritime Routing & Ice Hazard Intelligence Engine
+### Predictive Iceberg Intelligence & Adaptive Route Planning for Antarctic
 
-Smart India Hackathon 2026 · PS SIH26059 · Team **Deadline_Driven**
+**Antarctic Navigation System — Hybrid Global + Polar Maritime Routing & Ice Hazard Intelligence Engine**
 
-A browser-based navigation and decision-support tool that plans safe ship routes anywhere on Earth — including south of **−55°S**, where standard commercial maritime routing networks simply stop. It stitches a global shipping-lane graph to a purpose-built polar water graph, validates every route against real coastlines and ice shelves, and audits it against three independent iceberg datasets, all rendered on a 3D globe and a 2D tactical radar view.
+Smart India Hackathon 2026 · PS SIH26059 · *AI-Enabled Antarctic Sea-Ice, Iceberg Trajectory, and Navigation Decision Support System* · Team **Deadline_Driven**
+
+**POLARIS-X** is a browser-based navigation and decision-support tool that plans safe ship routes anywhere on Earth — including south of **−55°S**, where standard commercial maritime routing networks simply stop. It stitches a global shipping-lane graph to a purpose-built polar water graph, validates every route against real coastlines and ice shelves, and audits it against three independent iceberg datasets, all rendered on a 3D globe and a 2D tactical radar view.
 
 ---
 
@@ -34,7 +36,7 @@ Standard maritime routing data (e.g. Eurostat's MARNET network) has no edges sou
 - Standard point-in-polygon land checks misclassify ships docked at berths as "grounded," because high-resolution coastline data encloses wharves and jetties.
 - There's no single feed of iceberg hazard data — tracked giant icebergs, radar-detected grounded icebergs, and historical drift trajectories all come from different sources.
 
-This project builds a dual-core routing engine that bridges the global network to a custom polar water graph, smooths and validates every route against real land geometry, and layers independent ice-hazard auditing on top — without ever silently drawing a route through land.
+POLARIS-X builds a dual-core routing engine that bridges the global network to a custom polar water graph, smooths and validates every route against real land geometry, and layers independent ice-hazard auditing on top — without ever silently drawing a route through land.
 
 ## Highlights
 
