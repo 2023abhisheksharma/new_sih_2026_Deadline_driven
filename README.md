@@ -400,16 +400,6 @@ For the latest solver and performance figures, the Phase 8 reports are the refer
 
 ---
 
-## Team
-
-**Deadline_Driven** · Smart India Hackathon 2026 · Problem Statement SIH26059
-
-| Name | Role |
-| --- | --- |
-| Abhishek Sharma | <!-- TODO: role --> |
-| <!-- TODO: name --> | <!-- TODO: role --> |
-
----
 
 ## Data credits and license
 
